@@ -8,211 +8,198 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
-// Логин
+// Простая авторизация
 app.post('/login', (req, res) => {
-  const { username, password, remember } = req.body;
-  if (username === process.env.APP_LOGIN && password === process.env.APP_PASSWORD) {
-    res.json({ success: true, remember });
-  } else {
-    res.json({ success: false, message: 'Неверный логин или пароль' });
-  }
+    const { username, password, remember } = req.body;
+    if (username === process.env.APP_LOGIN && password === process.env.APP_PASSWORD) {
+        res.json({ success: true, remember });
+    } else {
+        res.json({ success: false, message: 'Неверный логин или пароль' });
+    }
 });
+
+// ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
+
+// Очистка текста от HTML тегов и лишних пробелов
+function cleanText(text) {
+    if (!text) return '';
+    return text.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+}
 
 // ====================== ПОИСКОВЫЕ ФУНКЦИИ ======================
 
 async function searchIntercom(question) {
-  console.log(`[Intercom] Ищем: "${question}"`);
-  let results = [];
+    console.log(`[Intercom] Поиск: "${question}"`);
+    let results = [];
+    const headers = {
+        'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
+        'Accept': 'application/json',
+        'Intercom-Version': '2.14',
+        'Content-Type': 'application/json'
+    };
 
-  // Попытка 1: точная фраза
-  for (const mode of ['exact', 'normal']) {
     try {
-      const phrase = mode === 'exact' ? `"${question}"` : question;
-      const res = await fetch('https://api.intercom.io/articles/search', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
-          'Accept': 'application/json',
-          'Intercom-Version': '2.14',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ phrase, state: 'published', help_center_id: process.env.INTERCOM_HELP_CENTER_ID })
-      });
+        // 1. Публичные статьи
+        const publicRes = await fetch('https://api.intercom.io/articles/search', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ phrase: question, state: 'published', help_center_id: process.env.INTERCOM_HELP_CENTER_ID })
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const arts = (data.articles || []).map(a => ({
-          title: a.title,
-          url: a.web_url,
-          snippet: a.highlight?.snippet || '',
-          source: 'Intercom (публичный)'
-        }));
-        results.push(...arts);
-        console.log(`[Intercom публичный] найдено ${arts.length}`);
-      }
-    } catch (e) { console.error('[Intercom public error]', e.message); }
-
-    // Internal
-    try {
-      const phrase = mode === 'exact' ? `"${question}"` : question;
-      const res = await fetch(`https://api.intercom.io/internal_articles/search?phrase=${encodeURIComponent(phrase)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
-          'Accept': 'application/json',
-          'Intercom-Version': 'Unstable'
+        if (publicRes.ok) {
+            const data = await publicRes.json();
+            (data.articles || []).forEach(a => {
+                results.push({
+                    title: cleanText(a.title),
+                    url: a.web_url,
+                    snippet: cleanText(a.highlight?.snippet || ''),
+                    source: 'Intercom Help Center'
+                });
+            });
         }
-      });
 
-      if (res.ok) {
-        const data = await res.json();
-        const arts = (data.articles || data.data || []).map(a => ({
-          title: a.title || a.name || 'Без названия',
-          url: a.url || a.web_url || '#',
-          snippet: (a.body || a.description || '').substring(0, 120),
-          source: 'Intercom (внутренний)'
-        }));
-        results.push(...arts);
-        console.log(`[Intercom internal] найдено ${arts.length}`);
-      }
-    } catch (e) { console.error('[Intercom internal error]', e.message); }
-  }
+        // 2. Внутренние статьи (Internal)
+        const internalRes = await fetch(`https://api.intercom.io/internal_articles/search?phrase=${encodeURIComponent(question)}`, {
+            headers: { ...headers, 'Intercom-Version': 'Unstable' }
+        });
 
-  return results;
+        if (internalRes.ok) {
+            const data = await internalRes.json();
+            const items = data.articles || data.data || [];
+            items.forEach(a => {
+                results.push({
+                    title: cleanText(a.title || a.name),
+                    url: a.url || a.web_url || '#',
+                    snippet: cleanText(a.body || a.description || '').substring(0, 120),
+                    source: 'Intercom Internal'
+                });
+            });
+        }
+    } catch (e) {
+        console.error('[Intercom Error]', e.message);
+    }
+    return results;
 }
 
 async function searchClickUp(question) {
-  console.log(`[ClickUp] Ищем: "${question}"`);
-  if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_LIST_IDS) return [];
+    console.log(`[ClickUp] Поиск: "${question}"`);
+    if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_LIST_IDS) return [];
 
-  const listIds = process.env.CLICKUP_LIST_IDS.split(',').map(id => id.trim()).filter(Boolean);
-  let tasks = [];
-  const qLower = question.toLowerCase().trim();
-  const words = qLower.split(/\s+/);
+    const listIds = process.env.CLICKUP_LIST_IDS.split(',').map(id => id.trim()).filter(Boolean);
+    let tasks = [];
+    const query = question.toLowerCase();
 
-  for (const listId of listIds) {
-    try {
-      const res = await fetch(
-        `https://api.clickup.com/api/v2/list/${listId}/task?include_closed=true&order_by=date_created&reverse=true&limit=100`,
-        { headers: { 'Authorization': process.env.CLICKUP_TOKEN } }
-      );
+    for (const listId of listIds) {
+        try {
+            const res = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task?include_closed=true&limit=100`, {
+                headers: { 'Authorization': process.env.CLICKUP_TOKEN }
+            });
 
-      if (res.ok) {
-        const data = await res.json();
-        const matching = (data.tasks || []).filter(t => {
-          const text = (t.name + ' ' + (t.description || '')).toLowerCase();
-          return words.every(w => text.includes(w)) || text.includes(qLower);
-        });
+            if (res.ok) {
+                const data = await res.json();
+                const filtered = (data.tasks || []).filter(t => {
+                    const content = (t.name + ' ' + (t.description || '')).toLowerCase();
+                    return content.includes(query);
+                });
 
-        tasks.push(...matching.map(t => ({
-          title: t.name,
-          url: t.url,
-          snippet: (t.description || '').substring(0, 100),
-          source: 'ClickUp'
-        })));
-        console.log(`[ClickUp список ${listId}] найдено ${matching.length}`);
-      }
-    } catch (e) {
-      console.error(`[ClickUp ${listId} error]`, e.message);
+                filtered.forEach(t => {
+                    tasks.push({
+                        title: t.name,
+                        url: t.url,
+                        snippet: cleanText(t.description).substring(0, 120),
+                        source: 'ClickUp Task'
+                    });
+                });
+            }
+        } catch (e) {
+            console.error(`[ClickUp Error List ${listId}]`, e.message);
+        }
     }
-  }
-
-  return [...new Map(tasks.map(t => [t.url, t])).values()]; // без дубликатов
+    return tasks;
 }
 
 async function searchCrocoblock(question) {
-  console.log(`[Crocoblock] Парсим: "${question}"`);
-  const url = `https://crocoblock.com/?s=${encodeURIComponent(question)}`;
-  let results = [];
+    console.log(`[Crocoblock] Парсинг: "${question}"`);
+    const url = `https://crocoblock.com/?s=${encodeURIComponent(question)}`;
+    let results = [];
 
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (res.ok) {
-      const html = await res.text();
-      const $ = cheerio.load(html);
+    try {
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (res.ok) {
+            const html = await res.text();
+            const $ = cheerio.load(html);
 
-      // Несколько возможных селекторов (на 2026 год)
-      const selectors = [
-        'article', '.post', '.search-result-item', '.entry', '.jet-search-result',
-        '[class*="search"] .item', '.blog-posts .post'
-      ];
+            // Ищем контейнеры постов
+            $('article, .jet-listing-dynamic-post, .post-item, .search-result-item').each((i, el) => {
+                if (results.length >= 7) return;
 
-      for (const sel of selectors) {
-        $(sel).slice(0, 5).each((i, el) => {
-          const title = $(el).find('h2, h3, .title, .post-title, a').first().text().trim();
-          let link = $(el).find('a').first().attr('href');
-          const snippet = $(el).find('.excerpt, p, .description, .summary').first().text().trim().substring(0, 100);
+                // Извлекаем заголовок: берем текст только из текстовых узлов, игнорируя <img> и прочее
+                let titleNode = $(el).find('h1, h2, h3, .entry-title, .title').first();
+                if (titleNode.length === 0) titleNode = $(el).find('a').first();
 
-          if (title && link) {
-            if (!link.startsWith('http')) link = 'https://crocoblock.com' + link;
-            results.push({ title, url: link, snippet, source: 'Crocoblock' });
-          }
-        });
-        if (results.length > 0) break;
-      }
+                let title = cleanText(titleNode.text());
+                let link = $(el).find('a').first().attr('href');
+                let snippet = cleanText($(el).find('.entry-excerpt, .excerpt, p').first().text());
 
-      console.log(`[Crocoblock] найдено ${results.length} результатов`);
+                if (title && link && link.startsWith('http')) {
+                    results.push({ title, url: link, snippet: snippet.substring(0, 150), source: 'Crocoblock Site' });
+                }
+            });
+        }
+    } catch (e) {
+        console.error('[Crocoblock Error]', e.message);
     }
-  } catch (e) {
-    console.error('[Crocoblock error]', e.message);
-  }
-
-  // Если парсинг не сработал — хотя бы ссылка
-  if (results.length === 0) {
-    results.push({
-      title: 'Открыть поиск на Crocoblock',
-      url: `https://crocoblock.com/?s=${encodeURIComponent(question)}`,
-      snippet: 'Статьи, гайды и документация',
-      source: 'Crocoblock (ссылка)'
-    });
-  }
-
-  return results;
+    return results;
 }
 
 // ====================== ГЛАВНЫЙ ЭНДПОИНТ ======================
+
 app.post('/ask', async (req, res) => {
-  const { question } = req.body;
-  if (!question?.trim()) return res.json({ answer: 'Введите вопрос!' });
+    const { question } = req.body;
+    if (!question?.trim()) return res.json({ answer: 'Пожалуйста, введите запрос.' });
 
-  const q = question.trim();
-  console.log(`\n=== НОВЫЙ ЗАПРОС === "${q}"`);
+    const q = question.trim();
+    
+    // Запускаем все поиски параллельно
+    const [intercom, clickup, croco] = await Promise.all([
+        searchIntercom(q),
+        searchClickUp(q),
+        searchCrocoblock(q)
+    ]);
 
-  let allResults = [];
+    let allResults = [...intercom, ...clickup, ...croco];
 
-  const [intercom, clickup, croco] = await Promise.all([
-    searchIntercom(q),
-    searchClickUp(q),
-    searchCrocoblock(q)
-  ]);
+    // Удаляем дубликаты по URL
+    allResults = Array.from(new Map(allResults.map(item => [item.url, item])).values());
 
-  allResults = [...intercom, ...clickup, ...croco];
-
-  // Сортируем по длине совпадения (простой способ)
-  allResults.sort((a, b) => b.title.length - a.title.length);
-
-  let html = `<strong>Поиск по запросу:</strong> ${q}<br><br>`;
-
-  if (allResults.length === 0) {
-    html += `❌ Ничего не найдено по точному запросу.<br><br>`;
-    html += `💡 Попробуйте ввести полный заголовок гайда или ключевые слова.<br>`;
-  } else {
-    html += `✅ Найдено ${allResults.length} результатов:<br><br>`;
-
-    allResults.slice(0, 15).forEach(r => {
-      html += `→ <a href="${r.url}" target="_blank">${r.title}</a><br>`;
-      html += `<small>${r.source} • ${r.snippet ? r.snippet + '...' : ''}</small><br><br>`;
+    // Сортировка: приоритет тем, где запрос есть в заголовке
+    allResults.sort((a, b) => {
+        const aTitleMatch = a.title.toLowerCase().includes(q.toLowerCase());
+        const bTitleMatch = b.title.toLowerCase().includes(q.toLowerCase());
+        return bTitleMatch - aTitleMatch;
     });
-  }
 
-  html += `<hr><strong>Дополнительно:</strong><br>`;
-  html += `• Если ничего не нашлось — напишите полный заголовок гайда<br>`;
+    // Формируем HTML ответ
+    let htmlOutput = `<div class="search-results-container">`;
+    htmlOutput += `<p>Результаты по запросу: <strong>${q}</strong></p><br>`;
 
-  res.json({ answer: html });
-  console.log(`[Ответ отправлен] Количество результатов: ${allResults.length}`);
+    if (allResults.length === 0) {
+        htmlOutput += `<p>Ничего не найдено. Попробуйте изменить формулировку.</p>`;
+    } else {
+        allResults.slice(0, 15).forEach(res => {
+            htmlOutput += `
+            <div class="result-item" style="margin-bottom: 20px;">
+                <div class="result-source" style="font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: bold;">${res.source}</div>
+                <a href="${res.url}" target="_blank" class="result-link" style="font-size: 1.1rem; color: #0066cc; text-decoration: none; font-weight: 600;">${res.title}</a>
+                <div class="result-snippet" style="font-size: 0.9rem; color: #444; margin-top: 4px;">${res.snippet || 'Описание отсутствует'}...</div>
+            </div>`;
+        });
+    }
+
+    htmlOutput += `</div>`;
+    res.json({ answer: htmlOutput });
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  console.log('   Логи будут в Render → Logs');
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
