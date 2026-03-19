@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
-// Простая авторизация
+// Авторизация
 app.post('/login', (req, res) => {
     const { username, password, remember } = req.body;
     if (username === process.env.APP_LOGIN && password === process.env.APP_PASSWORD) {
@@ -20,10 +20,31 @@ app.post('/login', (req, res) => {
 
 // ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
 
-// Очистка текста от HTML тегов и лишних пробелов
 function cleanText(text) {
     if (!text) return '';
     return text.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Оценка релевантности (чем выше score, тем выше результат)
+ */
+function getRelevanceScore(title, snippet, query) {
+    const q = query.toLowerCase();
+    const t = title.toLowerCase();
+    const s = snippet.toLowerCase();
+    let score = 0;
+
+    if (t.includes(q)) score += 100; // Точное совпадение в заголовке
+    else {
+        // Проверка по отдельным словам из запроса
+        const words = q.split(' ');
+        words.forEach(word => {
+            if (word.length > 2 && t.includes(word)) score += 20;
+        });
+    }
+    
+    if (s.includes(q)) score += 10; // Совпадение в описании
+    return score;
 }
 
 // ====================== ПОИСКОВЫЕ ФУНКЦИИ ======================
@@ -39,39 +60,24 @@ async function searchIntercom(question) {
     };
 
     try {
-        // 1. Публичные статьи
-        const publicRes = await fetch('https://api.intercom.io/articles/search', {
+        const res = await fetch('https://api.intercom.io/articles/search', {
             method: 'POST',
             headers,
-            body: JSON.stringify({ phrase: question, state: 'published', help_center_id: process.env.INTERCOM_HELP_CENTER_ID })
+            body: JSON.stringify({ phrase: question })
         });
 
-        if (publicRes.ok) {
-            const data = await publicRes.json();
-            (data.articles || []).forEach(a => {
+        if (res.ok) {
+            const data = await res.json();
+            const articles = data.articles || data.data || [];
+            articles.forEach(a => {
+                const title = cleanText(a.title);
+                const snippet = cleanText(a.description || a.body || '');
                 results.push({
-                    title: cleanText(a.title),
-                    url: a.web_url,
-                    snippet: cleanText(a.highlight?.snippet || ''),
-                    source: 'Intercom Help Center'
-                });
-            });
-        }
-
-        // 2. Внутренние статьи (Internal)
-        const internalRes = await fetch(`https://api.intercom.io/internal_articles/search?phrase=${encodeURIComponent(question)}`, {
-            headers: { ...headers, 'Intercom-Version': 'Unstable' }
-        });
-
-        if (internalRes.ok) {
-            const data = await internalRes.json();
-            const items = data.articles || data.data || [];
-            items.forEach(a => {
-                results.push({
-                    title: cleanText(a.title || a.name),
-                    url: a.url || a.web_url || '#',
-                    snippet: cleanText(a.body || a.description || '').substring(0, 120),
-                    source: 'Intercom Internal'
+                    title,
+                    url: a.url || a.web_url,
+                    snippet: snippet.substring(0, 160),
+                    source: 'Intercom Guide',
+                    score: getRelevanceScore(title, snippet, question) + 50 // Бонус за источник
                 });
             });
         }
@@ -82,41 +88,38 @@ async function searchIntercom(question) {
 }
 
 async function searchClickUp(question) {
-  console.log(`[ClickUp] Ищем: "${question}"`);
-  if (!process.env.CLICKUP_TOKEN) return [];
+    console.log(`[ClickUp] Поиск: "${question}"`);
+    if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_TEAM_ID) return [];
 
-  try {
-    // ВАЖНО: Вместо перебора списков используем поиск по всей Команде (Workspace)
-    // Параметр 'search' заставляет ClickUp искать совпадения в именах и описаниях
-    const teamId = process.env.CLICKUP_TEAM_ID; 
-    const url = `https://api.clickup.com/api/v2/team/${teamId}/task?search=${encodeURIComponent(question)}&include_closed=true`;
+    try {
+        // Поиск по всей команде с параметром search
+        const url = `https://api.clickup.com/api/v2/team/${process.env.CLICKUP_TEAM_ID}/task?search=${encodeURIComponent(question)}&include_closed=true`;
+        const res = await fetch(url, {
+            headers: { 'Authorization': process.env.CLICKUP_TOKEN }
+        });
 
-    const res = await fetch(url, {
-      headers: { 'Authorization': process.env.CLICKUP_TOKEN }
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      console.log(`[ClickUp] Найдено задач: ${data.tasks?.length || 0}`);
-      
-      return (data.tasks || []).map(t => ({
-        title: t.name,
-        url: t.url,
-        // Очищаем описание от лишнего мусора
-        snippet: cleanText(t.description || '').substring(0, 120),
-        source: 'ClickUp'
-      }));
-    } else {
-      console.error(`[ClickUp Error] Статус: ${res.status}`);
+        if (res.ok) {
+            const data = await res.json();
+            return (data.tasks || []).map(t => {
+                const title = t.name;
+                const snippet = cleanText(t.description || '');
+                return {
+                    title,
+                    url: t.url,
+                    snippet: snippet.substring(0, 160),
+                    source: 'ClickUp Task',
+                    score: getRelevanceScore(title, snippet, question) + 40 // Бонус за источник
+                };
+            });
+        }
+    } catch (e) {
+        console.error('[ClickUp Error]', e.message);
     }
-  } catch (e) {
-    console.error(`[ClickUp Error]`, e.message);
-  }
-  return [];
+    return [];
 }
 
 async function searchCrocoblock(question) {
-    console.log(`[Crocoblock] Парсинг: "${question}"`);
+    console.log(`[Crocoblock] Поиск: "${question}"`);
     const url = `https://crocoblock.com/?s=${encodeURIComponent(question)}`;
     let results = [];
 
@@ -126,20 +129,26 @@ async function searchCrocoblock(question) {
             const html = await res.text();
             const $ = cheerio.load(html);
 
-            // Ищем контейнеры постов
-            $('article, .jet-listing-dynamic-post, .post-item, .search-result-item').each((i, el) => {
-                if (results.length >= 7) return;
-
-                // Извлекаем заголовок: берем текст только из текстовых узлов, игнорируя <img> и прочее
+            $('article, .jet-listing-dynamic-post, .post-item').each((i, el) => {
                 let titleNode = $(el).find('h1, h2, h3, .entry-title, .title').first();
                 if (titleNode.length === 0) titleNode = $(el).find('a').first();
 
-                let title = cleanText(titleNode.text());
-                let link = $(el).find('a').first().attr('href');
-                let snippet = cleanText($(el).find('.entry-excerpt, .excerpt, p').first().text());
+                const title = cleanText(titleNode.text());
+                const link = $(el).find('a').first().attr('href');
+                const snippet = cleanText($(el).find('.entry-excerpt, .excerpt, p').first().text());
 
                 if (title && link && link.startsWith('http')) {
-                    results.push({ title, url: link, snippet: snippet.substring(0, 150), source: 'Crocoblock Site' });
+                    const score = getRelevanceScore(title, snippet, question);
+                    // Отсекаем совсем нерелевантный мусор с сайта
+                    if (score > 10) {
+                        results.push({ 
+                            title, 
+                            url: link, 
+                            snippet: snippet.substring(0, 160), 
+                            source: 'Crocoblock Site',
+                            score: score
+                        });
+                    }
                 }
             });
         }
@@ -153,42 +162,37 @@ async function searchCrocoblock(question) {
 
 app.post('/ask', async (req, res) => {
     const { question } = req.body;
-    if (!question?.trim()) return res.json({ answer: 'Пожалуйста, введите запрос.' });
+    if (!question?.trim()) return res.json({ answer: 'Введите запрос.' });
 
     const q = question.trim();
     
-    // Запускаем все поиски параллельно
+    // Параллельный запуск
     const [intercom, clickup, croco] = await Promise.all([
         searchIntercom(q),
         searchClickUp(q),
         searchCrocoblock(q)
     ]);
 
+    // Объединяем и фильтруем дубликаты
     let allResults = [...intercom, ...clickup, ...croco];
+    const uniqueResults = Array.from(new Map(allResults.map(item => [item.url, item])).values());
 
-    // Удаляем дубликаты по URL
-    allResults = Array.from(new Map(allResults.map(item => [item.url, item])).values());
+    // Итоговая сортировка по Score (релевантность + приоритет источника)
+    uniqueResults.sort((a, b) => b.score - a.score);
 
-    // Сортировка: приоритет тем, где запрос есть в заголовке
-    allResults.sort((a, b) => {
-        const aTitleMatch = a.title.toLowerCase().includes(q.toLowerCase());
-        const bTitleMatch = b.title.toLowerCase().includes(q.toLowerCase());
-        return bTitleMatch - aTitleMatch;
-    });
-
-    // Формируем HTML ответ
+    // Сборка ответа
     let htmlOutput = `<div class="search-results-container">`;
-    htmlOutput += `<p>Результаты по запросу: <strong>${q}</strong></p><br>`;
+    htmlOutput += `<p>Найдено подходящих ресурсов: <strong>${uniqueResults.length}</strong></p><hr style="border:0; border-top:1px solid #eee; margin:15px 0;">`;
 
-    if (allResults.length === 0) {
-        htmlOutput += `<p>Ничего не найдено. Попробуйте изменить формулировку.</p>`;
+    if (uniqueResults.length === 0) {
+        htmlOutput += `<p>К сожалению, ничего не найдено по запросу "${q}".</p>`;
     } else {
-        allResults.slice(0, 15).forEach(res => {
+        uniqueResults.slice(0, 12).forEach(item => {
             htmlOutput += `
-            <div class="result-item" style="margin-bottom: 20px;">
-                <div class="result-source" style="font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: bold;">${res.source}</div>
-                <a href="${res.url}" target="_blank" class="result-link" style="font-size: 1.1rem; color: #0066cc; text-decoration: none; font-weight: 600;">${res.title}</a>
-                <div class="result-snippet" style="font-size: 0.9rem; color: #444; margin-top: 4px;">${res.snippet || 'Описание отсутствует'}...</div>
+            <div class="result-item" style="margin-bottom: 20px; border-left: 3px solid ${item.source.includes('Intercom') ? '#00c2ff' : (item.source.includes('ClickUp') ? '#7b68ee' : '#eee')}; padding-left: 15px;">
+                <div class="result-source" style="font-size: 11px; color: #888; font-weight: bold;">${item.source}</div>
+                <a href="${item.url}" target="_blank" class="result-link" style="font-size: 17px; color: #0066ff; text-decoration: none; font-weight: 600; display: block; margin: 4px 0;">${item.title}</a>
+                <div class="result-snippet" style="font-size: 14px; color: #555; line-height: 1.4;">${item.snippet || 'Без описания'}...</div>
             </div>`;
         });
     }
@@ -198,5 +202,5 @@ app.post('/ask', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log(`🚀 Сервер на порту ${PORT}`);
 });
