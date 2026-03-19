@@ -82,40 +82,37 @@ async function searchIntercom(question) {
 }
 
 async function searchClickUp(question) {
-    console.log(`[ClickUp] Поиск: "${question}"`);
-    if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_LIST_IDS) return [];
+  console.log(`[ClickUp] Ищем: "${question}"`);
+  if (!process.env.CLICKUP_TOKEN) return [];
 
-    const listIds = process.env.CLICKUP_LIST_IDS.split(',').map(id => id.trim()).filter(Boolean);
-    let tasks = [];
-    const query = question.toLowerCase();
+  try {
+    // ВАЖНО: Вместо перебора списков используем поиск по всей Команде (Workspace)
+    // Параметр 'search' заставляет ClickUp искать совпадения в именах и описаниях
+    const teamId = process.env.CLICKUP_TEAM_ID; 
+    const url = `https://api.clickup.com/api/v2/team/${teamId}/task?search=${encodeURIComponent(question)}&include_closed=true`;
 
-    for (const listId of listIds) {
-        try {
-            const res = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task?include_closed=true&limit=100`, {
-                headers: { 'Authorization': process.env.CLICKUP_TOKEN }
-            });
+    const res = await fetch(url, {
+      headers: { 'Authorization': process.env.CLICKUP_TOKEN }
+    });
 
-            if (res.ok) {
-                const data = await res.json();
-                const filtered = (data.tasks || []).filter(t => {
-                    const content = (t.name + ' ' + (t.description || '')).toLowerCase();
-                    return content.includes(query);
-                });
-
-                filtered.forEach(t => {
-                    tasks.push({
-                        title: t.name,
-                        url: t.url,
-                        snippet: cleanText(t.description).substring(0, 120),
-                        source: 'ClickUp Task'
-                    });
-                });
-            }
-        } catch (e) {
-            console.error(`[ClickUp Error List ${listId}]`, e.message);
-        }
+    if (res.ok) {
+      const data = await res.json();
+      console.log(`[ClickUp] Найдено задач: ${data.tasks?.length || 0}`);
+      
+      return (data.tasks || []).map(t => ({
+        title: t.name,
+        url: t.url,
+        // Очищаем описание от лишнего мусора
+        snippet: cleanText(t.description || '').substring(0, 120),
+        source: 'ClickUp'
+      }));
+    } else {
+      console.error(`[ClickUp Error] Статус: ${res.status}`);
     }
-    return tasks;
+  } catch (e) {
+    console.error(`[ClickUp Error]`, e.message);
+  }
+  return [];
 }
 
 async function searchCrocoblock(question) {
