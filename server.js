@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const app = express();
@@ -7,128 +6,108 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
-// Вспомогательная очистка текста
-const clean = (txt) => (txt || '').replace(/\s+/g, ' ').trim();
-
 // ====================== ПОИСК INTERCOM ======================
 async function searchIntercom(q) {
-    if (!process.env.INTERCOM_TOKEN) {
-        console.error('Ошибка: INTERCOM_TOKEN не найден в .env');
-        return [];
-    }
+    // Используем INTERCOM_TOKEN из Render
+    const token = process.env.INTERCOM_TOKEN;
+    if (!token) return [];
+
     try {
         const res = await fetch('https://api.intercom.io/articles/search', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
+                'Authorization': `Bearer ${token}`,
                 'Intercom-Version': '2.14',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ phrase: q })
+            body: JSON.stringify({ 
+                phrase: q,
+                // Если в Render есть ID хелп-центра, ограничиваем поиск им
+                help_center_id: process.env.INTERCOM_HELP_CENTER_ID 
+            })
         });
         
         const data = await res.json();
-        
-        // Если API вернуло ошибку (например, 401)
-        if (data.errors) {
-            console.error('Intercom API Error:', data.errors);
-            return [];
-        }
-
         const articles = data.articles || data.data || [];
         return articles.map(a => ({
-            title: a.title || 'Untitled Article',
-            url: a.url || a.web_url || '#',
+            title: a.title,
+            url: a.url || a.web_url,
             source: 'INTERCOM GUIDE',
             color: '#00c2ff'
         }));
     } catch (e) {
-        console.error('Intercom Fetch Exception:', e.message);
         return [];
     }
 }
 
 // ====================== ПОИСК CLICKUP ======================
 async function searchClickUp(q) {
-    if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_TEAM_ID) {
-        console.error('Ошибка: CLICKUP_TOKEN или TEAM_ID не найдены в .env');
-        return [];
-    }
+    const token = process.env.CLICKUP_TOKEN;
+    const listIds = process.env.CLICKUP_LIST_IDS; // Берем строку из Render (напр. "123,456")
+
+    if (!token || !listIds) return [];
+
     try {
-        const url = `https://api.clickup.com/api/v2/team/${process.env.CLICKUP_TEAM_ID}/task?search=${encodeURIComponent(q)}&include_closed=true`;
-        
-        const res = await fetch(url, { 
-            headers: { 'Authorization': process.env.CLICKUP_TOKEN } 
-        });
-        
-        const data = await res.json();
-        
-        if (!res.ok) {
-            console.error('ClickUp API Error Status:', res.status);
-            return [];
+        // Так как у нас есть только List IDs, нам нужно искать внутри конкретных списков
+        const ids = listIds.split(',').map(id => id.trim());
+        let allTasks = [];
+
+        // Проходим по каждому списку из Render и ищем таски
+        for (const listId of ids) {
+            const url = `https://api.clickup.com/api/v2/list/${listId}/task?search=${encodeURIComponent(q)}&include_closed=true`;
+            const res = await fetch(url, { headers: { 'Authorization': token } });
+            const data = await res.json();
+            
+            if (data.tasks) {
+                allTasks = [...allTasks, ...data.tasks];
+            }
         }
 
-        const tasks = data.tasks || [];
-        return tasks.map(t => ({
-            title: t.name || 'Untitled Task',
-            url: t.url || '#',
+        return allTasks.map(t => ({
+            title: t.name,
+            url: t.url,
             source: 'CLICKUP TASK',
             color: '#7b68ee'
         }));
     } catch (e) {
-        console.error('ClickUp Fetch Exception:', e.message);
         return [];
     }
 }
 
-// ====================== ГЛАВНЫЙ ОБРАБОТЧИК ======================
+// ====================== ЭНДПОИНТ ======================
 app.post('/ask', async (req, res) => {
     const { question } = req.body;
     const q = (question || '').trim();
 
-    if (!q) return res.json({ answer: 'Введите поисковый запрос.' });
+    if (!q) return res.json({ answer: 'Введите запрос.' });
 
-    console.log(`--- Новый поиск: "${q}" ---`);
-
-    // Запускаем только два источника
+    // Запускаем поиск по Intercom и ClickUp
     const [intercom, clickup] = await Promise.all([
         searchIntercom(q),
         searchClickUp(q)
     ]);
 
-    const allResults = [...intercom, ...clickup];
+    const results = [...intercom, ...clickup];
 
-    // Формируем HTML
-    let html = `<div class="results-container" style="font-family: sans-serif;">`;
-    
-    // Техническая строка для дебага
-    html += `<div style="font-size:11px; color:#999; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:5px;">
-        Найдено: Intercom (${intercom.length}), ClickUp (${clickup.length})
+    let html = `<div style="font-family: sans-serif;">`;
+    // Выводим статистику, чтобы вы видели, что пришло из Render
+    html += `<div style="font-size:10px; color:#ccc; margin-bottom:10px;">
+        Status: Intercom(${intercom.length}) | ClickUp(${clickup.length})
     </div>`;
 
-    if (allResults.length === 0) {
-        html += `
-            <div style="padding: 20px; text-align: center; color: #666;">
-                <p>Ничего не найдено в Intercom и ClickUp по запросу <strong>"${q}"</strong>.</p>
-                <p style="font-size: 13px;">Проверьте правильность написания или настройки API ключей.</p>
-            </div>`;
+    if (results.length === 0) {
+        html += `<p>По запросу <strong>"${q}"</strong> ничего не найдено в рабочих базах.</p>`;
     } else {
-        allResults.forEach(item => {
+        results.forEach(item => {
             html += `
-            <div class="result-card" style="margin-bottom: 20px; border-left: 4px solid ${item.color}; padding-left: 15px;">
-                <div style="font-size: 10px; font-weight: bold; color: ${item.color}; text-transform: uppercase; letter-spacing: 0.5px;">
-                    ${item.source}
-                </div>
-                <a href="${item.url}" target="_blank" style="display: block; font-size: 17px; color: #0066ff; text-decoration: none; font-weight: 600; margin: 5px 0;">
-                    ${item.title}
-                </a>
-                <div style="font-size: 12px; color: #888;">Нажмите на заголовок, чтобы открыть ресурс</div>
+            <div style="margin-bottom: 15px; border-left: 4px solid ${item.color}; padding-left: 12px;">
+                <span style="font-size: 10px; font-weight: bold; color: ${item.color};">${item.source}</span><br>
+                <a href="${item.url}" target="_blank" style="color: #0066ff; text-decoration: none; font-weight: 600;">${item.title}</a>
             </div>`;
         });
     }
 
-    html += `</div>`;
-    res.json({ answer: html });
+    res.json({ answer: html + '</div>' });
 });
 
-app.listen(PORT, () => console.log(`🚀 Сервер работает на порту ${PORT}`));
+app.listen(PORT);
