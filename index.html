@@ -2,122 +2,149 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Интерком и ClickUp чат</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Поиск по гайдам</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<!-- Попап логина -->
-<div id="loginPopup" class="popup">
-  <div class="popup-content">
-    <h2>Вход в чат</h2>
-    <input type="text" id="loginUser" placeholder="Логин" />
-    <input type="password" id="loginPass" placeholder="Пароль" />
-    <label><input type="checkbox" id="rememberMe"> Запомнить на 2 недели</label>
-    <button id="loginBtn">Войти</button>
-    <p id="loginError" class="error"></p>
+  <!-- Попап логина -->
+  <div id="loginPopup" class="popup">
+    <div class="popup-content">
+      <h2>Вход</h2>
+      <input type="text" id="loginUser" placeholder="Логин" autocomplete="username" />
+      <input type="password" id="loginPass" placeholder="Пароль" autocomplete="current-password" />
+      <label class="remember">
+        <input type="checkbox" id="rememberMe" />
+        Запомнить меня (2 недели)
+      </label>
+      <button id="loginBtn">Войти</button>
+      <p id="loginError" class="error"></p>
+    </div>
   </div>
-</div>
 
-<!-- Основной чат -->
-<div class="chat-container" id="chatContainer" style="display:none;">
-  <h2>Чат по гайдам Intercom и ClickUp</h2>
-  <div id="chat"></div>
-  <div class="input-row">
-    <input type="text" id="question" placeholder="Введите вопрос..." />
-    <button id="askBtn">Спросить</button>
+  <!-- Основной чат -->
+  <div class="chat-container" id="chatContainer">
+    <div class="chat-header">
+      <h2>Поиск по гайдам</h2>
+    </div>
+    <div id="chat" class="chat-messages"></div>
+    <div class="input-area">
+      <input type="text" id="question" placeholder="Задайте вопрос..." autocomplete="off" />
+      <button id="askBtn">Отправить</button>
+    </div>
   </div>
-</div>
 
-<script>
-const chatDiv = document.getElementById('chat');
-const input = document.getElementById('question');
-const btn = document.getElementById('askBtn');
+  <script>
+    const chatDiv = document.getElementById('chat');
+    const input = document.getElementById('question');
+    const askBtn = document.getElementById('askBtn');
+    const loginPopup = document.getElementById('loginPopup');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginUser = document.getElementById('loginUser');
+    const loginPass = document.getElementById('loginPass');
+    const rememberMe = document.getElementById('rememberMe');
+    const loginError = document.getElementById('loginError');
 
-// Попап логина
-const loginPopup = document.getElementById('loginPopup');
-const loginBtn = document.getElementById('loginBtn');
-const loginUser = document.getElementById('loginUser');
-const loginPass = document.getElementById('loginPass');
-const rememberMe = document.getElementById('rememberMe');
-const loginError = document.getElementById('loginError');
-
-// Проверка localStorage
-const loggedData = JSON.parse(localStorage.getItem('chatLoggedIn'));
-if (loggedData && new Date(loggedData.expiry) > new Date()) {
-  loginPopup.style.display = 'none';
-  document.getElementById('chatContainer').style.display = 'flex';
-}
-
-// Безопасный вывод HTML
-function safeHTML(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML.replace(/\n/g, '<br>');
-}
-
-// Логин
-loginBtn.addEventListener('click', () => {
-  const username = loginUser.value;
-  const password = loginPass.value;
-
-  fetch('/login', {
-    method: 'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({username, password, remember: rememberMe.checked})
-  })
-  .then(res => res.json())
-  .then(data => {
-    if(data.success) {
+    // Проверка авторизации через localStorage
+    const loggedData = JSON.parse(localStorage.getItem('chatLoggedIn'));
+    if (loggedData && new Date(loggedData.expiry) > new Date()) {
       loginPopup.style.display = 'none';
       document.getElementById('chatContainer').style.display = 'flex';
-      if(data.remember) {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 14);
-        localStorage.setItem('chatLoggedIn', JSON.stringify({user: username, expiry}));
-      }
-    } else {
-      loginError.textContent = 'Неверный логин или пароль';
     }
-  });
-});
 
-// Enter в поле ввода
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') btn.click();
-});
+    // Безопасный вывод текста → HTML
+    function safeHTML(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML.replace(/\n/g, '<br>');
+    }
 
-// AJAX поиск
-btn.addEventListener('click', async () => {
-  const question = input.value.trim();
-  if(!question) return;
+    // Добавление сообщения в чат
+    function addMessage(text, isUser = false) {
+      const msg = document.createElement('div');
+      msg.className = `message ${isUser ? 'user' : 'bot'}`;
+      
+      const content = document.createElement('div');
+      content.className = 'message-content';
+      content.innerHTML = safeHTML(text);
+      
+      msg.appendChild(content);
+      chatDiv.appendChild(msg);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
 
-  chatDiv.innerHTML += `<p><strong>Вы:</strong> ${safeHTML(question)}</p>`;
-  input.value = '';
+    // Логин
+    loginBtn.addEventListener('click', async () => {
+      const username = loginUser.value.trim();
+      const password = loginPass.value.trim();
+      if (!username || !password) return;
 
-  const loader = document.createElement('p');
-  loader.id = 'loader';
-  loader.textContent = 'Идет поиск...';
-  chatDiv.appendChild(loader);
-  chatDiv.scrollTop = chatDiv.scrollHeight;
+      loginError.textContent = '';
+      try {
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, remember: rememberMe.checked })
+        });
+        const data = await res.json();
 
-  try {
-    const res = await fetch('/ask', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question})
+        if (data.success) {
+          loginPopup.style.display = 'none';
+          document.getElementById('chatContainer').style.display = 'flex';
+          if (data.remember) {
+            const expiry = new Date();
+            expiry.setDate(expiry.getDate() + 14);
+            localStorage.setItem('chatLoggedIn', JSON.stringify({ expiry }));
+          }
+        } else {
+          loginError.textContent = 'Неверный логин или пароль';
+        }
+      } catch (err) {
+        loginError.textContent = 'Ошибка соединения';
+      }
     });
-    const data = await res.json();
-    loader.remove();
 
-    chatDiv.innerHTML += `<p><strong>Ответ:</strong> ${data.answer}</p>`;
-    chatDiv.scrollTop = chatDiv.scrollHeight;
-  } catch (err) {
-    loader.remove();
-    chatDiv.innerHTML += `<p class="error">Ошибка при поиске. Попробуйте позже.</p>`;
-  }
-});
-</script>
+    // Отправка по Enter
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        askBtn.click();
+      }
+    });
 
+    // Отправка вопроса
+    askBtn.addEventListener('click', async () => {
+      const question = input.value.trim();
+      if (!question) return;
+
+      addMessage(question, true);
+      input.value = '';
+      askBtn.disabled = true;
+
+      const loader = document.createElement('div');
+      loader.className = 'message bot';
+      loader.innerHTML = '<div class="message-content loading">Поиск<span class="dots"></span></div>';
+      chatDiv.appendChild(loader);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+
+      try {
+        const res = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+        const data = await res.json();
+
+        loader.remove();
+        addMessage(data.answer || 'Нет ответа');
+      } catch (err) {
+        loader.remove();
+        addMessage('Ошибка при поиске. Попробуйте позже.', false);
+      } finally {
+        askBtn.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
 </body>
 </html>
