@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Поиск по гайдам</title>
+  <title>Поиск по гайдам Crocoblock</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Попап логина -->
   <div id="loginPopup" class="popup">
     <div class="popup-content">
       <h2>Вход</h2>
@@ -22,8 +21,7 @@
     </div>
   </div>
 
-  <!-- Основной чат -->
-  <div class="chat-container" id="chatContainer">
+  <div class="chat-container" id="chatContainer" style="display: none;">
     <div class="chat-header">
       <h2>Поиск по гайдам</h2>
     </div>
@@ -39,47 +37,52 @@
     const input = document.getElementById('question');
     const askBtn = document.getElementById('askBtn');
     const loginPopup = document.getElementById('loginPopup');
+    const chatContainer = document.getElementById('chatContainer');
     const loginBtn = document.getElementById('loginBtn');
     const loginUser = document.getElementById('loginUser');
     const loginPass = document.getElementById('loginPass');
     const rememberMe = document.getElementById('rememberMe');
     const loginError = document.getElementById('loginError');
 
-    // Проверка авторизации через localStorage
+    // 1. Проверка авторизации
     const loggedData = JSON.parse(localStorage.getItem('chatLoggedIn'));
     if (loggedData && new Date(loggedData.expiry) > new Date()) {
+      showChat();
+    }
+
+    function showChat() {
       loginPopup.style.display = 'none';
-      document.getElementById('chatContainer').style.display = 'flex';
+      chatContainer.style.display = 'flex';
+      input.focus();
     }
 
-    // Безопасный вывод текста → HTML
-    function safeHTML(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML.replace(/\n/g, '<br>');
-    }
-
-    // Добавление сообщения в чат
-    function addMessage(text, isUser = false) {
+    // 2. Добавление сообщения в чат
+    function addMessage(content, isUser = false) {
       const msg = document.createElement('div');
       msg.className = `message ${isUser ? 'user' : 'bot'}`;
       
-      const content = document.createElement('div');
-      content.className = 'message-content';
-      content.innerHTML = safeHTML(text);
+      const msgContent = document.createElement('div');
+      msgContent.className = 'message-content';
+
+      if (isUser) {
+        // Для сообщений пользователя используем textContent (безопасность)
+        msgContent.textContent = content;
+      } else {
+        // Для бота разрешаем HTML, так как сервер присылает разметку ссылок
+        msgContent.innerHTML = content;
+      }
       
-      msg.appendChild(content);
+      msg.appendChild(msgContent);
       chatDiv.appendChild(msg);
       chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
-    // Логин
+    // 3. Логика входа
     loginBtn.addEventListener('click', async () => {
       const username = loginUser.value.trim();
       const password = loginPass.value.trim();
       if (!username || !password) return;
 
-      loginError.textContent = '';
       try {
         const res = await fetch('/login', {
           method: 'POST',
@@ -89,41 +92,34 @@
         const data = await res.json();
 
         if (data.success) {
-          loginPopup.style.display = 'none';
-          document.getElementById('chatContainer').style.display = 'flex';
-          if (data.remember) {
+          if (rememberMe.checked) {
             const expiry = new Date();
             expiry.setDate(expiry.getDate() + 14);
             localStorage.setItem('chatLoggedIn', JSON.stringify({ expiry }));
           }
+          showChat();
         } else {
-          loginError.textContent = 'Неверный логин или пароль';
+          loginError.textContent = data.message || 'Ошибка входа';
         }
       } catch (err) {
-        loginError.textContent = 'Ошибка соединения';
+        loginError.textContent = 'Ошибка соединения с сервером';
       }
     });
 
-    // Отправка по Enter
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        askBtn.click();
-      }
-    });
-
-    // Отправка вопроса
-    askBtn.addEventListener('click', async () => {
+    // 4. Отправка вопроса
+    async function handleSend() {
       const question = input.value.trim();
-      if (!question) return;
+      if (!question || askBtn.disabled) return;
 
+      // Отображаем вопрос пользователя
       addMessage(question, true);
       input.value = '';
       askBtn.disabled = true;
 
+      // Создаем лоадер
       const loader = document.createElement('div');
-      loader.className = 'message bot';
-      loader.innerHTML = '<div class="message-content loading">Поиск<span class="dots"></span></div>';
+      loader.className = 'message bot loading-msg';
+      loader.innerHTML = '<div class="message-content">Ищу в гайдах...</div>';
       chatDiv.appendChild(loader);
       chatDiv.scrollTop = chatDiv.scrollHeight;
 
@@ -136,14 +132,19 @@
         const data = await res.json();
 
         loader.remove();
-        addMessage(data.answer || 'Нет ответа');
+        addMessage(data.answer || 'Извините, ничего не нашлось.');
       } catch (err) {
         loader.remove();
-        addMessage('Ошибка при поиске. Попробуйте позже.', false);
+        addMessage('Произошла ошибка при получении данных.');
       } finally {
         askBtn.disabled = false;
         input.focus();
       }
+    }
+
+    askBtn.addEventListener('click', handleSend);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSend();
     });
   </script>
 </body>
