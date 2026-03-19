@@ -1,39 +1,110 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Интерком чат</title>
+  <title>Интерком и ClickUp чат</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="chat-container">
-    <h2>Чат по гайдам Intercom</h2>
-    <div id="chat"></div>
+
+<!-- Попап логина -->
+<div id="loginPopup" class="popup">
+  <div class="popup-content">
+    <h2>Вход в чат</h2>
+    <input type="text" id="loginUser" placeholder="Логин" />
+    <input type="password" id="loginPass" placeholder="Пароль" />
+    <label><input type="checkbox" id="rememberMe"> Запомнить на 2 недели</label>
+    <button id="loginBtn">Войти</button>
+    <p id="loginError" class="error"></p>
+  </div>
+</div>
+
+<!-- Основной чат -->
+<div class="chat-container" id="chatContainer" style="display:none;">
+  <h2>Чат по гайдам Intercom и ClickUp</h2>
+  <div id="chat"></div>
+  <div class="input-row">
     <input type="text" id="question" placeholder="Введите вопрос..." />
     <button id="askBtn">Спросить</button>
   </div>
+</div>
 
-  <script>
-    const chatDiv = document.getElementById('chat');
-    const input = document.getElementById('question');
-    const btn = document.getElementById('askBtn');
+<script>
+const chatDiv = document.getElementById('chat');
+const input = document.getElementById('question');
+const btn = document.getElementById('askBtn');
 
-    btn.addEventListener('click', async () => {
-      const question = input.value;
-      if (!question) return;
+// Попап логина
+const loginPopup = document.getElementById('loginPopup');
+const loginBtn = document.getElementById('loginBtn');
+const loginUser = document.getElementById('loginUser');
+const loginPass = document.getElementById('loginPass');
+const rememberMe = document.getElementById('rememberMe');
+const loginError = document.getElementById('loginError');
 
-      chatDiv.innerHTML += `<p><strong>Вы:</strong> ${question}</p>`;
-      input.value = '';
+function setCookie(name, value, days) {
+  const expires = new Date(Date.now() + days*24*60*60*1000).toUTCString();
+  document.cookie = name + "=" + value + ";expires=" + expires + ";path=/";
+}
 
-      const res = await fetch('/ask', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({question})
-      });
-      const data = await res.json();
-      chatDiv.innerHTML += `<p><strong>Ответ:</strong> ${data.answer}</p>`;
-      chatDiv.scrollTop = chatDiv.scrollHeight;
-    });
-  </script>
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  return match ? match[2] : null;
+}
+
+// Проверка существующего cookie
+if(getCookie('chatLoggedIn') === 'true') {
+  loginPopup.style.display = 'none';
+  document.getElementById('chatContainer').style.display = 'flex';
+}
+
+loginBtn.addEventListener('click', () => {
+  const username = loginUser.value;
+  const password = loginPass.value;
+
+  fetch('/login', {
+    method: 'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password, remember: rememberMe.checked})
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(data.success) {
+      loginPopup.style.display = 'none';
+      document.getElementById('chatContainer').style.display = 'flex';
+      if(data.remember) setCookie('chatLoggedIn', 'true', 14); // 2 недели
+    } else {
+      loginError.textContent = 'Неверный логин или пароль';
+    }
+  });
+});
+
+// AJAX поиск
+btn.addEventListener('click', async () => {
+  const question = input.value;
+  if(!question) return;
+
+  chatDiv.innerHTML += `<p><strong>Вы:</strong> ${question}</p>`;
+  input.value = '';
+
+  const loader = document.createElement('p');
+  loader.id = 'loader';
+  loader.textContent = 'Идет поиск...';
+  chatDiv.appendChild(loader);
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+
+  const res = await fetch('/ask', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({question})
+  });
+  const data = await res.json();
+  document.getElementById('loader').remove();
+
+  chatDiv.innerHTML += `<p><strong>Ответ:</strong> ${data.answer}</p>`;
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+});
+</script>
+
 </body>
 </html>
