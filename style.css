@@ -1,12 +1,12 @@
+/* Общие стили */
 body, html {
   margin:0; padding:0; height:100%;
   font-family: Arial, sans-serif;
   background: #f0f2f5;
-  display:flex;
-  justify-content:center;
-  align-items:center;
+  display:flex; justify-content:center; align-items:center;
 }
 
+/* Контейнер чата */
 .chat-container {
   width:90%; max-width:600px; height:80%;
   background:#fff;
@@ -16,6 +16,7 @@ body, html {
   display:flex; flex-direction:column;
 }
 
+/* Блок с сообщениями */
 #chat {
   flex:1; overflow-y:auto;
   border:1px solid #ddd;
@@ -23,11 +24,14 @@ body, html {
   margin-bottom:10px;
   background:#f9f9f9;
   border-radius:8px;
+  scroll-behavior: smooth; /* плавная прокрутка */
 }
 
+/* Ввод и кнопка */
 .input-row { display:flex; }
 input { flex:1; padding:10px; border-radius:6px; border:1px solid #ccc; margin-right:10px; }
-button { padding:10px 15px; border-radius:6px; border:none; background:#4a90e2; color:#fff; cursor:pointer; }
+button { padding:10px 15px; border-radius:6px; border:none; background:#4a90e2; color:#fff; cursor:pointer; transition:0.2s; }
+button:hover { background:#357ABD; }
 button:disabled { background:#999; cursor:not-allowed; }
 
 /* Попап логина */
@@ -35,3 +39,13 @@ button:disabled { background:#999; cursor:not-allowed; }
 .popup-content { background:#fff; padding:30px; border-radius:12px; width:300px; display:flex; flex-direction:column; }
 .popup-content input { margin-bottom:10px; }
 .error { color:red; margin-top:5px; }
+
+/* Стили для сообщений */
+#chat p { margin:5px 0; }
+#chat p strong { color:#4a90e2; }
+
+/* Индикатор загрузки */
+#loader {
+  font-style: italic;
+  color: #666;
+}
