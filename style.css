@@ -1,0 +1,35 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: center;
+  margin-top: 50px;
+}
+
+.chat-container {
+  width: 400px;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#chat {
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f1f1f1;
+}
+
+input {
+  width: 70%;
+  padding: 8px;
+}
+
+button {
+  width: 25%;
+  padding: 8px;
+  cursor: pointer;
+}
