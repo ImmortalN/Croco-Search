@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -42,22 +42,21 @@ const loginPass = document.getElementById('loginPass');
 const rememberMe = document.getElementById('rememberMe');
 const loginError = document.getElementById('loginError');
 
-function setCookie(name, value, days) {
-  const expires = new Date(Date.now() + days*24*60*60*1000).toUTCString();
-  document.cookie = name + "=" + value + ";expires=" + expires + ";path=/";
-}
-
-function getCookie(name) {
-  const match = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
-  return match ? match[2] : null;
-}
-
-// Проверка существующего cookie
-if(getCookie('chatLoggedIn') === 'true') {
+// Проверка localStorage
+const loggedData = JSON.parse(localStorage.getItem('chatLoggedIn'));
+if (loggedData && new Date(loggedData.expiry) > new Date()) {
   loginPopup.style.display = 'none';
   document.getElementById('chatContainer').style.display = 'flex';
 }
 
+// Безопасный вывод HTML
+function safeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML.replace(/\n/g, '<br>');
+}
+
+// Логин
 loginBtn.addEventListener('click', () => {
   const username = loginUser.value;
   const password = loginPass.value;
@@ -72,19 +71,28 @@ loginBtn.addEventListener('click', () => {
     if(data.success) {
       loginPopup.style.display = 'none';
       document.getElementById('chatContainer').style.display = 'flex';
-      if(data.remember) setCookie('chatLoggedIn', 'true', 14); // 2 недели
+      if(data.remember) {
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + 14);
+        localStorage.setItem('chatLoggedIn', JSON.stringify({user: username, expiry}));
+      }
     } else {
       loginError.textContent = 'Неверный логин или пароль';
     }
   });
 });
 
+// Enter в поле ввода
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') btn.click();
+});
+
 // AJAX поиск
 btn.addEventListener('click', async () => {
-  const question = input.value;
+  const question = input.value.trim();
   if(!question) return;
 
-  chatDiv.innerHTML += `<p><strong>Вы:</strong> ${question}</p>`;
+  chatDiv.innerHTML += `<p><strong>Вы:</strong> ${safeHTML(question)}</p>`;
   input.value = '';
 
   const loader = document.createElement('p');
@@ -93,16 +101,21 @@ btn.addEventListener('click', async () => {
   chatDiv.appendChild(loader);
   chatDiv.scrollTop = chatDiv.scrollHeight;
 
-  const res = await fetch('/ask', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({question})
-  });
-  const data = await res.json();
-  document.getElementById('loader').remove();
+  try {
+    const res = await fetch('/ask', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question})
+    });
+    const data = await res.json();
+    loader.remove();
 
-  chatDiv.innerHTML += `<p><strong>Ответ:</strong> ${data.answer}</p>`;
-  chatDiv.scrollTop = chatDiv.scrollHeight;
+    chatDiv.innerHTML += `<p><strong>Ответ:</strong> ${data.answer}</p>`;
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+  } catch (err) {
+    loader.remove();
+    chatDiv.innerHTML += `<p class="error">Ошибка при поиске. Попробуйте позже.</p>`;
+  }
 });
 </script>
 
