@@ -1,35 +1,60 @@
-body {
+/* style.css */
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
   font-family: Arial, sans-serif;
-  background: #f8f9fa;
+  background: #f0f2f5;
   display: flex;
   justify-content: center;
-  margin-top: 50px;
+  align-items: center;
 }
 
 .chat-container {
-  width: 400px;
+  width: 90%;
+  max-width: 600px;
+  height: 80%;
   background: #fff;
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
 }
 
 #chat {
-  height: 300px;
+  flex: 1;
   overflow-y: auto;
   border: 1px solid #ddd;
   padding: 10px;
   margin-bottom: 10px;
-  background: #f1f1f1;
+  background: #f9f9f9;
+  border-radius: 8px;
 }
 
 input {
-  width: 70%;
-  padding: 8px;
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-right: 10px;
+}
+
+.button-container {
+  display: flex;
+  justify-content: flex-end;
 }
 
 button {
-  width: 25%;
-  padding: 8px;
+  padding: 10px 15px;
+  border-radius: 6px;
+  border: none;
+  background: #4a90e2;
+  color: #fff;
   cursor: pointer;
+}
+
+button:disabled {
+  background: #999;
+  cursor: not-allowed;
 }
