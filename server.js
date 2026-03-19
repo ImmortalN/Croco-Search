@@ -105,6 +105,7 @@ app.post('/ask', async (req,res) => {
 Вопрос: ${question}
 Контекст:
 ${rawFindings}`;
+
       const gemRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
         {
@@ -116,14 +117,25 @@ ${rawFindings}`;
           })
         }
       );
-      const data = await gemRes.json();
-      finalAnswer = data.candidates?.[0]?.content?.parts?.[0]?.text || '(Gemini вернул пустой ответ)';
+
+      if (!gemRes.ok) {
+        const errText = await gemRes.text();
+        if (gemRes.status === 403 || gemRes.status === 429 || errText.toLowerCase().includes('quota')) {
+          finalAnswer = 'Лимит бесплатного ключа Gemini исчерпан. Попробуйте позже.';
+        } else {
+          throw new Error(`Gemini статус ${gemRes.status}`);
+        }
+      } else {
+        const data = await gemRes.json();
+        finalAnswer = data.candidates?.[0]?.content?.parts?.[0]?.text || '(Gemini вернул пустой ответ)';
+      }
     } catch(err) {
       console.error('Gemini error:', err.message);
-      finalAnswer = `Ошибка Gemini: ${err.message}`;
+      if (!finalAnswer) finalAnswer = 'Ошибка Gemini: ' + err.message;
     }
   }
 
+  // Отправляем ответ с <br>
   res.json({ answer: finalAnswer.replace(/\n/g,'<br>') });
 });
 
