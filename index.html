@@ -73,13 +73,22 @@ async function login() {
 }
 
 function showApp() {
-  loginPopup.style.visibility = 'hidden'; // Полностью убираем видимость
-  loginPopup.style.display = 'none';      // Убираем из потока
+  // 1. Полностью удаляем попап из DOM, чтобы он не мешал кликам и вводу
+  if (loginPopup) {
+    loginPopup.remove(); 
+  }
+
+  // 2. Показываем приложение
   appContainer.style.display = 'block';
+  
+  // 3. Небольшая задержка перед фокусом, чтобы браузер успел отрисовать инпут
   setTimeout(() => {
     appContainer.style.opacity = '1';
-    searchInput.focus(); // Принудительный фокус для ввода
-  }, 50);
+    searchInput.disabled = false; // На всякий случай включаем
+    searchInput.focus();
+    console.log("Search input focused");
+  }, 100);
+
   startStatusPolling();
 }
 
@@ -89,10 +98,16 @@ function startStatusPolling() {
     try {
       const res = await fetch('/sync-status');
       const data = await res.json();
-      document.getElementById('progressBar').style.width = data.percent + '%';
-      document.getElementById('statusLabel').innerText = `${data.progress} (${data.percent}%)`;
+      const bar = document.getElementById('progressBar');
+      const label = document.getElementById('statusLabel');
+      
+      if (bar) bar.style.width = data.percent + '%';
+      if (label) label.innerText = `${data.progress} (${data.percent}%)`;
+      
       if (!data.loading && data.percent === 0) fetch('/sync');
-    } catch (e) {}
+    } catch (e) {
+      console.error("Status check failed");
+    }
   }, 2000);
 }
 
@@ -138,10 +153,16 @@ async function handleSearch() {
 }
 
 // EVENT LISTENERS
-document.getElementById('loginSubmitBtn').onclick = login;
-document.getElementById('searchBtn').onclick = handleSearch;
-document.getElementById('refreshBtn').onclick = () => fetch('/sync');
-searchInput.onkeydown = (e) => e.key === 'Enter' && handleSearch();
+document.getElementById('loginSubmitBtn').addEventListener('click', login);
+document.getElementById('searchBtn').addEventListener('click', handleSearch);
+document.getElementById('refreshBtn').addEventListener('click', () => fetch('/sync'));
+
+// Поиск по Enter
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    handleSearch();
+  }
+});
 
 // RE-AUTH CHECK
 if (localStorage.getItem(STORAGE_KEY)) {
