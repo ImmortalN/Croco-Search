@@ -11,15 +11,14 @@ app.use(express.static('.'));
 
 let syncStatus = {
   loading: false,
-  progress: 'Ожидание...',
+  progress: 'Waiting...',
   percent: 0
 };
 
-// Создаем базу с 5 колонками (включая source для фильтрации)
 const db = new sqlite3.Database('./intercom.db');
 
 db.serialize(() => {
-  db.run("DROP TABLE IF EXISTS articles"); // Пересоздаем, чтобы колонки точно совпали
+  db.run("DROP TABLE IF EXISTS articles");
   db.run(`
     CREATE VIRTUAL TABLE articles USING fts5(
       id UNINDEXED,
@@ -32,71 +31,55 @@ db.serialize(() => {
   `);
 });
 
-// --- ФУНКЦИИ ЗАГРУЗКИ С ПАГИНАЦИЕЙ ---
-
-async function loadInternal() {
-  const headers = { 'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`, 'Accept': 'application/json', 'Intercom-Version': 'Unstable' };
-  let all = [], page = 1, total = 1;
-  while (page <= total) {
-    syncStatus.progress = `Загрузка Internal: стр ${page}`;
-    const res = await fetch(`https://api.intercom.io/internal_articles?page=${page}&per_page=150`, { headers });
-    const data = await res.json();
-    const items = data.data || [];
-    items.forEach(a => all.push({
-      id: `int_${a.id}`,
-      title: a.title || '',
-      body: (a.body || '').replace(/<[^>]+>/g, ' '),
-      url: `https://app.intercom.com/a/apps/${process.env.INTERCOM_WORKSPACE_ID}/articles/articles/${a.id}/show`,
-      source: 'internal'
-    }));
-    total = data.pages?.total_pages || 1;
-    if (items.length < 150) break;
-    page++;
-  }
-  return all;
+// Фильтр для картинок
+function isImage(item) {
+  const extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif', '.svg'];
+  const text = (item.title + item.url).toLowerCase();
+  return extensions.some(ext => text.endsWith(ext));
 }
 
-async function loadPublic() {
-  const headers = { 'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`, 'Accept': 'application/json', 'Intercom-Version': '2.11' };
+async function loadType(path, version, sourceName, weightStart, weightMax) {
   let all = [], page = 1, total = 1;
-  while (page <= total) {
-    syncStatus.progress = `Загрузка Public: стр ${page}`;
-    const res = await fetch(`https://api.intercom.io/articles?page=${page}&per_page=150`, { headers });
-    const data = await res.json();
-    const items = data.data || [];
-    items.forEach(a => all.push({
-      id: `pub_${a.id}`,
-      title: a.title || '',
-      body: (a.body || '').replace(/<[^>]+>/g, ' '),
-      url: a.url || '#',
-      source: 'public'
-    }));
-    total = data.pages?.total_pages || 1;
-    if (items.length < 150) break;
-    page++;
-  }
-  return all;
-}
+  const headers = { 
+    'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`, 
+    'Accept': 'application/json', 
+    'Intercom-Version': version 
+  };
 
-async function loadExternal() {
-  const headers = { 'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`, 'Accept': 'application/json', 'Intercom-Version': '2.14' };
-  let all = [], page = 1, total = 1;
   while (page <= total) {
-    syncStatus.progress = `Загрузка Website Guides: стр ${page}`;
-    // ИСПОЛЬЗУЕМ AI/EXTERNAL_PAGES как советовал Интерком
-    const res = await fetch(`https://api.intercom.io/ai/external_pages?page=${page}&per_page=150`, { headers });
-    const data = await res.json();
-    const items = data.data || [];
-    items.forEach(p => all.push({
-      id: `ext_${p.id}`,
-      title: p.title || '',
-      body: (p.body || '').replace(/<[^>]+>/g, ' '),
-      url: p.url || '#',
-      source: 'external'
-    }));
-    total = data.pages?.total_pages || 1;
-    if (items.length < 150) break;
-    page++;
+    syncStatus.progress = `Loading ${sourceName}: page ${page}`;
+    syncStatus.percent = weightStart + Math.round((page / (total || 1)) * weightMax);
+
+    try {
+      const res = await fetch(`https://api.intercom.io/${path}${path.includes('?') ? '&' : '?'}page=${page}&per_page=150`, { headers });
+      const data = await res.json();
+      const items = data.data || [];
+
+      items.forEach(item => {
+        // Пропускаем, если это картинка
+        if (isImage(item)) return;
+
+        let url = item.url || '#';
+        if (sourceName === 'Internal') {
+          url = `https://app.intercom.com/a/apps/${process.env.INTERCOM_WORKSPACE_ID}/articles/articles/${item.id}/show`;
+        }
+
+        all.push({
+          id: `${sourceName.toLowerCase()}_${item.id}`,
+          title: item.title || '',
+          body: (item.body || '').replace(/<[^>]+>/g, ' ').substring(0, 10000), // Ограничим размер текста для скорости
+          url: url,
+          source: sourceName.toLowerCase()
+        });
+      });
+
+      total = data.pages?.total_pages || 1;
+      if (items.length < 150) break;
+      page++;
+    } catch (e) { 
+      console.error(`Error loading ${sourceName}:`, e.message);
+      break; 
+    }
   }
   return all;
 }
@@ -104,21 +87,18 @@ async function loadExternal() {
 async function runFullSync() {
   if (syncStatus.loading) return;
   syncStatus.loading = true;
-  syncStatus.percent = 5;
   
   try {
-    const internal = await loadInternal();
-    syncStatus.percent = 35;
-    
-    const publicArticles = await loadPublic();
-    syncStatus.percent = 65;
-    
-    const external = await loadExternal();
-    syncStatus.percent = 90;
+    // Запускаем параллельно для скорости
+    const [internal, publicA, external] = await Promise.all([
+      loadType('internal_articles', 'Unstable', 'Internal', 0, 30),
+      loadType('articles', '2.11', 'Public', 30, 30),
+      loadType('ai/external_pages', '2.14', 'External', 60, 30)
+    ]);
 
-    const all = [...internal, ...publicArticles, ...external];
+    const all = [...internal, ...publicA, ...external];
     
-    syncStatus.progress = 'Сохранение...';
+    syncStatus.progress = 'Saving to Database...';
     db.serialize(() => {
       db.run('DELETE FROM articles');
       const stmt = db.prepare('INSERT INTO articles VALUES (?, ?, ?, ?, ?)');
@@ -127,49 +107,34 @@ async function runFullSync() {
     });
 
     syncStatus.percent = 100;
-    syncStatus.progress = 'Готово';
-    console.log(`✅ Синхронизировано: ${all.length} статей`);
+    syncStatus.progress = 'Done';
+    console.log(`Successfully synced: ${all.length} items`);
   } catch (e) {
-    console.error('Ошибка:', e);
-    syncStatus.progress = 'Ошибка: ' + e.message;
+    syncStatus.progress = 'Error occurred';
   } finally {
     syncStatus.loading = false;
   }
 }
 
-// Эндпоинты
-app.get('/sync', (req, res) => {
-  runFullSync();
-  res.json({ status: 'started' });
-});
-
+app.get('/sync', (req, res) => { runFullSync(); res.json({status: 'started'}); });
 app.get('/sync-status', (req, res) => res.json(syncStatus));
-
 app.post('/ask', (req, res) => {
   const q = (req.body.question || '').trim();
   if (!q) return res.json({ results: [] });
-  
   const query = q.split(/\s+/).filter(w => w.length > 0).map(w => w + '*').join(' ');
-  
   db.all(`SELECT title, url, body, source FROM articles WHERE articles MATCH ? LIMIT 20`, [query], (err, rows) => {
-    if (err) {
-      console.error('Search error:', err);
-      return res.json({ results: [] });
-    }
+    if (err) return res.json({ results: [] });
     res.json({ results: rows });
   });
 });
 
 app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === process.env.APP_LOGIN && password === process.env.APP_PASSWORD) {
+  if (req.body.username === process.env.APP_LOGIN && req.body.password === process.env.APP_PASSWORD) {
     res.json({ success: true });
-  } else {
-    res.json({ success: false });
-  }
+  } else res.json({ success: false });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  runFullSync(); // Автозапуск при старте
+  console.log(`Server started on port ${PORT}`);
+  runFullSync();
 });
