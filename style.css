@@ -1,6 +1,6 @@
-body { font-family: sans-serif; background: #f4f7f9; margin: 0; color: #333; }
+body { font-family: -apple-system, system-ui, sans-serif; background: #f4f7f9; margin: 0; color: #333; }
 .container { max-width: 850px; margin: 0 auto; padding: 40px 20px; }
-header h1 { text-align: center; margin-top: 0; color: #2c3e50; }
+header h1 { text-align: center; margin-top: 0; color: #2c3e50; font-size: 28px; }
 
 /* ПАНЕЛЬ СТАТУСА */
 .sync-panel {
@@ -14,33 +14,90 @@ header h1 { text-align: center; margin-top: 0; color: #2c3e50; }
   gap: 20px;
 }
 .progress-box { flex: 1; }
-.bar-container { background: #eee; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 5px; }
-.bar-fill { background: #3498db; width: 0%; height: 100%; transition: width 0.3s; }
-.status-label { font-size: 11px; color: #7f8c8d; }
-.sync-btn { border: 1px solid #ddd; background: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.bar-container { background: #eee; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 5px; }
+.bar-fill { background: #3498db; width: 0%; height: 100%; transition: width 0.5s ease-in-out; }
+.status-label { font-size: 12px; color: #7f8c8d; font-weight: 500; }
+
+.sync-btn { 
+  border: 1px solid #ddd; 
+  background: #fff; 
+  padding: 8px 15px; 
+  border-radius: 8px; 
+  cursor: pointer; 
+  font-size: 12px; 
+  transition: all 0.2s;
+}
+.sync-btn:hover { background: #f9f9f9; border-color: #bbb; }
+.sync-btn:active { transform: translateY(1px); }
 
 /* ПОИСК */
 .search-area { display: flex; gap: 10px; margin-bottom: 30px; }
-.search-area input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; outline: none; }
-.search-area button { background: #3498db; color: white; border: none; padding: 0 25px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+.search-area input { 
+  flex: 1; 
+  padding: 15px; 
+  border-radius: 10px; 
+  border: 2px solid #eee; 
+  font-size: 16px; 
+  outline: none; 
+  transition: border-color 0.2s;
+}
+.search-area input:focus { border-color: #3498db; }
 
-/* КАРТОЧКИ */
+.search-area button { 
+  background: #3498db; 
+  color: white; 
+  border: none; 
+  padding: 0 30px; 
+  border-radius: 10px; 
+  cursor: pointer; 
+  font-weight: bold; 
+  transition: background 0.2s;
+}
+.search-area button:hover { background: #2980b9; }
+.search-area button:active { transform: scale(0.98); }
+
+/* КАРТОЧКИ РЕЗУЛЬТАТОВ */
 .results-grid { display: flex; flex-direction: column; gap: 15px; }
-.card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
-.card a { font-size: 18px; color: #2980b9; text-decoration: none; font-weight: bold; display: block; margin-bottom: 8px; }
-.card p { font-size: 14px; color: #555; margin: 0; line-height: 1.5; }
+.card { 
+  background: white; 
+  padding: 20px; 
+  border-radius: 12px; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+  position: relative; 
+  transition: transform 0.2s;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 
-.badge { font-size: 9px; text-transform: uppercase; font-weight: bold; padding: 3px 6px; border-radius: 4px; margin-bottom: 8px; display: inline-block; }
-.card-internal { border-left: 5px solid #2980b9; }
-.card-public { border-left: 5px solid #27ae60; }
-.card-external { border-left: 5px solid #e67e22; }
+.card a { font-size: 18px; color: #2980b9; text-decoration: none; font-weight: bold; display: block; margin-bottom: 8px; }
+.card a:hover { text-decoration: underline; }
+.card p { font-size: 14px; color: #555; margin: 0; line-height: 1.6; }
+
+.badge { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 4px 8px; border-radius: 5px; margin-bottom: 10px; display: inline-block; }
+
+/* ЦВЕТОВЫЕ СХЕМЫ */
+.card-internal { border-left: 6px solid #2980b9; }
+.card-public { border-left: 6px solid #27ae60; }
+.card-external { border-left: 6px solid #e67e22; }
 
 .badge-internal { background: #ebf5fb; color: #2980b9; }
 .badge-public { background: #eafaf1; color: #27ae60; }
 .badge-external { background: #fef5e7; color: #e67e22; }
 
+/* ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ */
+.loading { text-align: center; color: #7f8c8d; padding: 20px; font-style: italic; }
+.no-results { text-align: center; color: #e74c3c; padding: 20px; font-weight: 500; }
+
 /* ЛОГИН */
-.popup { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.popup-content { background: white; padding: 30px; border-radius: 15px; width: 280px; text-align: center; }
-.popup-content input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-.popup-content button { width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 6px; margin-top: 10px; cursor: pointer; }
+.popup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+.popup-content { background: white; padding: 40px; border-radius: 20px; width: 320px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.popup-content h2 { margin-top: 0; color: #2c3e50; }
+.popup-content input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+.popup-content button { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 8px; margin-top: 15px; cursor: pointer; font-weight: bold; font-size: 16px; }
+.error { color: #e74c3c; font-size: 13px; margin-top: 12px; font-weight: 500; }
+
+/* МОБИЛЬНАЯ ВЕРСИЯ */
+@media (max-width: 600px) {
+  .sync-panel { flex-direction: column; text-align: center; }
+  .search-area { flex-direction: column; }
+  .search-area button { padding: 15px; }
+}
