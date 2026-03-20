@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Knowledge Base</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -12,12 +13,12 @@
     <h2>Login</h2>
     <input id="loginUser" type="text" placeholder="Username">
     <input id="loginPass" type="password" placeholder="Password">
-    <button onclick="login()">Sign In</button>
+    <button id="loginSubmitBtn">Sign In</button>
     <div id="loginError" class="error"></div>
   </div>
 </div>
 
-<div class="container" id="app" style="display:none;">
+<div class="container" id="app" style="display:none; opacity: 0; transition: opacity 0.5s;">
   <header>
     <h1>Knowledge Base</h1>
   </header>
@@ -29,41 +30,60 @@
       </div>
       <div id="statusLabel" class="status-label">Initializing...</div>
     </div>
-    <button class="sync-btn" onclick="startSync()">🔄 Refresh Base</button>
+    <button class="sync-btn" id="refreshBtn">🔄 Refresh Base</button>
   </div>
 
   <div class="search-area">
-    <input id="searchInput" type="text" placeholder="Search guides (e.g. JetEngine)...">
-    <button id="searchBtn" onclick="search()">Search</button>
+    <input id="searchInput" type="text" placeholder="Search guides (e.g. JetEngine)..." autocomplete="off">
+    <button id="searchBtn">Search</button>
   </div>
 
   <div id="results" class="results-grid"></div>
 </div>
 
 <script>
-// ... (весь JS из предыдущего ответа остается таким же, он уже был на английском) ...
 const STORAGE_KEY = 'kb_auth';
+const loginPopup = document.getElementById('loginPopup');
+const appContainer = document.getElementById('app');
+const searchInput = document.getElementById('searchInput');
 
+// --- AUTH LOGIC ---
 async function login() {
   const user = document.getElementById('loginUser').value;
   const pass = document.getElementById('loginPass').value;
-  const res = await fetch('/login', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username: user, password: pass })
-  });
-  const data = await res.json();
-  if (data.success) { localStorage.setItem(STORAGE_KEY, '1'); initApp(); }
-  else { document.getElementById('loginError').innerText = 'Invalid credentials'; }
+  const errorDiv = document.getElementById('loginError');
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username: user, password: pass })
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      localStorage.setItem(STORAGE_KEY, '1');
+      showApp();
+    } else {
+      errorDiv.innerText = 'Invalid credentials';
+    }
+  } catch (e) {
+    errorDiv.innerText = 'Server error';
+  }
 }
 
-function initApp() {
-  document.getElementById('loginPopup').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('searchInput').focus();
+function showApp() {
+  loginPopup.style.visibility = 'hidden'; // Полностью убираем видимость
+  loginPopup.style.display = 'none';      // Убираем из потока
+  appContainer.style.display = 'block';
+  setTimeout(() => {
+    appContainer.style.opacity = '1';
+    searchInput.focus(); // Принудительный фокус для ввода
+  }, 50);
   startStatusPolling();
 }
 
+// --- SYNC MONITORING ---
 function startStatusPolling() {
   setInterval(async () => {
     try {
@@ -76,45 +96,57 @@ function startStatusPolling() {
   }, 2000);
 }
 
-async function startSync() { await fetch('/sync'); }
-
-async function search() {
-  const query = document.getElementById('searchInput').value.trim();
+// --- SEARCH LOGIC ---
+async function handleSearch() {
+  const query = searchInput.value.trim();
   if (!query) return;
+
   const resultsDiv = document.getElementById('results');
   resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
-  
-  const res = await fetch('/ask', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ question: query })
-  });
-  const data = await res.json();
-  resultsDiv.innerHTML = '';
 
-  if (!data || !data.results || !data.results.length) {
-    resultsDiv.innerHTML = '<p class="no-results">No results found.</p>';
-    return;
+  try {
+    const res = await fetch('/ask', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question: query })
+    });
+    const data = await res.json();
+    resultsDiv.innerHTML = '';
+
+    if (!data.results || data.results.length === 0) {
+      resultsDiv.innerHTML = '<p class="no-results">No results found.</p>';
+      return;
+    }
+
+    data.results.forEach(item => {
+      let typeLabel = 'Public';
+      if (item.source === 'internal') typeLabel = 'Internal';
+      if (item.source === 'external') typeLabel = 'Website (Guide)';
+
+      const card = document.createElement('div');
+      card.className = `card card-${item.source}`;
+      card.innerHTML = `
+        <span class="badge badge-${item.source}">${typeLabel}</span>
+        <a href="${item.url}" target="_blank">${item.title}</a>
+        <p>${(item.body || '').substring(0, 160)}...</p>
+      `;
+      resultsDiv.appendChild(card);
+    });
+  } catch (e) {
+    resultsDiv.innerHTML = '<p class="error">Search failed.</p>';
   }
-
-  data.results.forEach(item => {
-    let typeLabel = 'Public';
-    if (item.source === 'internal') typeLabel = 'Internal';
-    if (item.source === 'external') typeLabel = 'Website (Guide)';
-
-    const card = document.createElement('div');
-    card.className = `card card-${item.source}`;
-    card.innerHTML = `
-      <span class="badge badge-${item.source}">${typeLabel}</span>
-      <a href="${item.url}" target="_blank">${item.title}</a>
-      <p>${(item.body || '').substring(0, 160)}...</p>
-    `;
-    resultsDiv.appendChild(card);
-  });
 }
 
-document.getElementById('searchInput').onkeydown = (e) => e.key === 'Enter' && search();
-if (localStorage.getItem(STORAGE_KEY)) initApp();
+// EVENT LISTENERS
+document.getElementById('loginSubmitBtn').onclick = login;
+document.getElementById('searchBtn').onclick = handleSearch;
+document.getElementById('refreshBtn').onclick = () => fetch('/sync');
+searchInput.onkeydown = (e) => e.key === 'Enter' && handleSearch();
+
+// RE-AUTH CHECK
+if (localStorage.getItem(STORAGE_KEY)) {
+  showApp();
+}
 </script>
 </body>
 </html>
