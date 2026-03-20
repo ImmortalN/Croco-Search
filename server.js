@@ -35,39 +35,41 @@ db.serialize(() => {
 // ─── Полная выгрузка всех internal articles из Intercom ─────────────────────
 async function loadAllIntercomArticles() {
   const token = process.env.INTERCOM_TOKEN;
-  if (!token) throw new Error('INTERCOM_TOKEN не задан в .env');
+  if (!token) throw new Error('INTERCOM_TOKEN не задан');
 
   const workspace = process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox';
   const headers = {
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/json',
-    'Intercom-Version': 'Unstable'   // если не работает — попробуйте '2.14'
+    'Intercom-Version': 'Unstable'  // или '2.14' — протестируй оба
   };
 
   let articles = [];
   let startingAfter = null;
   let page = 0;
 
-  console.log('🚀 Начало полной синхронизации Intercom internal articles');
+  console.log('🚀 Полная синхронизация Intercom internal_articles');
 
-  do {
+  while (true) {  // бесконечный цикл, выход по break
     page++;
-    const params = new URLSearchParams({ per_page: '150' });  // максимум от Intercom
-    if (startingAfter) params.append('starting_after', startingAfter);
+    const params = new URLSearchParams({ per_page: '150' });
+    if (startingAfter) {
+      params.append('starting_after', startingAfter);
+    }
 
     const url = `https://api.intercom.io/internal_articles?${params}`;
-    console.log(`  Страница ${page} → ${url}`);
+    console.log(`Страница ${page}: ${url}`);
 
     const res = await fetch(url, { headers });
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Intercom вернул ${res.status}: ${text}`);
+      const err = await res.text();
+      throw new Error(`Intercom ${res.status}: ${err}`);
     }
 
     const data = await res.json();
-    const pageItems = data.data || data.articles || [];
+    const pageItems = data.data || data.articles || data.internal_articles || [];
 
-    console.log(`    Получено элементов: ${pageItems.length}`);
+    console.log(`  Получено: ${pageItems.length} статей`);
 
     pageItems.forEach(item => {
       articles.push({
@@ -78,12 +80,17 @@ async function loadAllIntercomArticles() {
       });
     });
 
-    // Самый важный момент — правильное получение следующего курсора
-    startingAfter = data.pages?.next?.starting_after || null;
+    // Ключевой момент: берём курсор ТОЛЬКО если pages.next существует
+    if (data.pages && data.pages.next && data.pages.next.starting_after) {
+      startingAfter = data.pages.next.starting_after;
+      console.log(`  Курсор найден → следующая страница`);
+    } else {
+      console.log(`  Курсор отсутствует → конец списка`);
+      break;
+    }
+  }
 
-  } while (startingAfter !== null);
-
-  console.log(`✅ Всего загружено статей: ${articles.length}`);
+  console.log(`✅ Итого статей: ${articles.length}`);
   return articles;
 }
 
