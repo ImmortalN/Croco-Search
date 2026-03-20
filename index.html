@@ -34,13 +34,14 @@
 
   <div class="search-area">
     <input id="searchInput" type="text" placeholder="Search guides (e.g. JetEngine)...">
-    <button onclick="search()">Search</button>
+    <button id="searchBtn" onclick="search()">Search</button>
   </div>
 
   <div id="results" class="results-grid"></div>
 </div>
 
 <script>
+// ... (весь JS из предыдущего ответа остается таким же, он уже был на английском) ...
 const STORAGE_KEY = 'kb_auth';
 
 async function login() {
@@ -91,7 +92,7 @@ async function search() {
   const data = await res.json();
   resultsDiv.innerHTML = '';
 
-  if (!data.results.length) {
+  if (!data || !data.results || !data.results.length) {
     resultsDiv.innerHTML = '<p class="no-results">No results found.</p>';
     return;
   }
@@ -106,7 +107,7 @@ async function search() {
     card.innerHTML = `
       <span class="badge badge-${item.source}">${typeLabel}</span>
       <a href="${item.url}" target="_blank">${item.title}</a>
-      <p>${item.body.substring(0, 160)}...</p>
+      <p>${(item.body || '').substring(0, 160)}...</p>
     `;
     resultsDiv.appendChild(card);
   });
