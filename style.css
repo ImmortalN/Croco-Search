@@ -6,17 +6,17 @@
 body, html {
   margin: 0;
   padding: 0;
-  height: 100%;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f0f2f5;
-  color: #0f1419;
+  background: #f5f7fa;
+  color: #111;
+  min-height: 100vh;
 }
 
 /* Попап логина */
 .popup {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0,0,0,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,195 +25,131 @@ body, html {
 
 .popup-content {
   background: white;
-  padding: 32px 28px;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  padding: 30px;
+  border-radius: 12px;
+  width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
 .popup-content h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   text-align: center;
-  color: #0f1419;
 }
 
 .popup-content input {
-  padding: 12px 16px;
-  border: 1px solid #d0d5dd;
-  border-radius: 10px;
-  font-size: 16px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 15px;
 }
 
-.popup-content input:focus {
-  outline: none;
-  border-color: #0066ff;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
-}
-
-.remember {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #536471;
-}
-
-#loginBtn {
-  padding: 12px;
-  background: #0066ff;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-#loginBtn:hover {
-  background: #0055dd;
-}
-
-.error {
-  color: #e0245e;
-  font-size: 14px;
+#error {
+  color: red;
+  font-size: 13px;
   text-align: center;
-  margin: 0;
 }
 
-/* Чат */
-.chat-container {
-  display: none;
-  flex-direction: column;
-  height: 100vh;
-  max-width: 800px;
+/* Основной контейнер поиска */
+.container {
+  max-width: 900px;
   margin: 0 auto;
-  background: white;
+  padding: 40px 20px;
 }
 
-.chat-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #eff3f4;
+/* Заголовок */
+h1 {
   text-align: center;
-  background: white;
+  margin-bottom: 24px;
 }
 
-.chat-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f1419;
+/* Поисковая строка */
+.search-box {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
-.chat-messages {
+.search-box input {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  background: #f8f9fa;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.message {
-  display: flex;
-  max-width: 85%;
-  margin-bottom: 4px;
-}
-
-.message.user {
-  align-self: flex-end;
-  flex-direction: row-reverse;
-}
-
-.message-content {
-  padding: 12px 16px;
-  border-radius: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #ccc;
   font-size: 16px;
-  line-height: 1.45;
-  word-wrap: break-word;
 }
 
-.user .message-content {
-  background: #0066ff;
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-
-.bot .message-content {
-  background: #e5e7eb;
-  color: #0f1419;
-  border-bottom-left-radius: 4px;
-}
-
-.loading {
-  background: #e5e7eb !important;
-  color: #536471 !important;
-}
-
-.dots::after {
-  content: '.';
-  animation: dots 1.5s steps(4, end) infinite;
-}
-
-@keyframes dots {
-  0%   { content: '.';    }
-  33%  { content: '..';   }
-  66%  { content: '...';  }
-  100% { content: '.';    }
-}
-
-/* Поле ввода */
-.input-area {
-  display: flex;
-  padding: 12px 16px;
-  background: white;
-  border-top: 1px solid #eff3f4;
-  gap: 12px;
-}
-
-#question {
-  flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #d0d5dd;
-  border-radius: 24px;
-  font-size: 16px;
-  outline: none;
-}
-
-#question:focus {
-  border-color: #0066ff;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
-}
-
-#askBtn {
-  padding: 0 20px;
-  background: #0066ff;
-  color: white;
+.search-box button {
+  padding: 14px 20px;
   border: none;
-  border-radius: 24px;
+  border-radius: 12px;
+  background: #0066ff;
+  color: white;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
 }
 
-#askBtn:hover:not(:disabled) {
-  background: #0055dd;
-}
-
-#askBtn:disabled {
-  background: #cbd5e1;
+.search-box button:disabled {
+  background: #9bbcff;
   cursor: not-allowed;
 }
 
-/* Мобильная адаптивность */
+/* Sync кнопка */
+.sync-btn {
+  background: #111;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+/* Loader */
+.loader {
+  text-align: center;
+  padding: 20px;
+  color: #555;
+}
+
+/* Результаты */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result {
+  background: white;
+  padding: 14px;
+  border-radius: 10px;
+  border-left: 4px solid #0066ff;
+}
+
+.result small {
+  color: #777;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.result a {
+  display: block;
+  margin: 4px 0;
+  color: #0066cc;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.result a:hover {
+  text-decoration: underline;
+}
+
+.snippet {
+  font-size: 13px;
+  color: #555;
+}
+
+/* Мобильная адаптация */
 @media (max-width: 500px) {
-  .chat-header h2 { font-size: 18px; }
-  .message { max-width: 92%; }
-  .input-area { padding: 10px 12px; }
+  .search-box input { font-size: 14px; }
+  .search-box button { font-size: 14px; }
+  .container { padding: 20px 12px; }
 }
