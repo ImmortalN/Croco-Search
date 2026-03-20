@@ -1,188 +1,63 @@
-/* ОБЩИЕ СТИЛИ */
 body {
   margin: 0;
-  background: #f0f2f5;
-  color: #1c1e21;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 40px 20px;
-}
-
-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
-header h1 {
-  font-size: 24px;
+  background: #f4f6f9;
+  font-family: -apple-system, system-ui, sans-serif;
   color: #333;
-  margin-top: 10px;
 }
+
+.container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+
+header h1 { text-align: center; font-size: 22px; margin-bottom: 30px; }
+
+/* СИНХРОНИЗАЦИЯ */
+.sync-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: #fff;
+  padding: 10px 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.progress-container { flex: 1; margin-right: 20px; }
+
+.progress-bar-bg { background: #eee; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 5px; }
+
+.progress-bar-fill { background: #007bff; width: 0%; height: 100%; transition: width 0.4s; }
+
+.status-text { font-size: 11px; color: #777; }
+
+.mini-sync-btn { background: none; border: 1px solid #ddd; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; }
 
 /* ПОИСК */
-.search-box {
-  display: flex;
-  gap: 10px;
-  background: white;
-  padding: 10px;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  margin-bottom: 30px;
-}
+.search-box { display: flex; gap: 10px; margin-bottom: 30px; }
 
-.search-box input {
-  flex: 1;
-  border: none;
-  padding: 12px;
-  font-size: 16px;
-  outline: none;
-}
+.search-box input { flex: 1; padding: 15px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; }
 
-.search-box button {
-  background: #0066ff;
-  color: white;
-  border: none;
-  padding: 0 25px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
+.search-box button { background: #007bff; color: white; border: none; padding: 0 25px; border-radius: 10px; font-weight: 600; cursor: pointer; }
 
-/* СИНХРОНИЗАЦИЯ И ПРОГРЕСС */
-.sync-container {
-  text-align: right;
-  margin-bottom: 20px;
-}
+/* КАРТОЧКИ */
+.result-card { background: #fff; padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
-.btn-sync {
-  background: #f7f9fc;
-  border: 1px solid #dcdfe6;
-  padding: 8px 15px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-}
+.result-card a { font-size: 18px; color: #007bff; text-decoration: none; font-weight: 700; display: block; margin-bottom: 8px; }
 
-.btn-sync:disabled { opacity: 0.6; }
+.result-card p { font-size: 14px; color: #555; margin: 0; line-height: 1.5; }
 
-.progress-wrapper {
-  margin-top: 15px;
-  text-align: left;
-}
+.tag { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; display: inline-block; margin-bottom: 8px; }
 
-.progress-bar-bg {
-  background: #e0e4e9;
-  height: 10px;
-  border-radius: 5px;
-  overflow: hidden;
-  margin-bottom: 5px;
-}
-
-.progress-bar-fill {
-  background: #00c2ff;
-  width: 0%;
-  height: 100%;
-  transition: width 0.3s ease;
-}
-
-.status-text {
-  font-size: 12px;
-  color: #666;
-}
-
-/* КАРТОЧКИ РЕЗУЛЬТАТОВ */
-.results-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.result-card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-  position: relative;
-}
-
-.card-link {
-  font-size: 18px;
-  color: #0066ff;
-  text-decoration: none;
-  font-weight: 700;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.card-link:hover { text-decoration: underline; }
-
-.card-snippet {
-  font-size: 14px;
-  color: #4b4f56;
-  line-height: 1.5;
-}
-
-/* ЦВЕТА ПО ТИПАМ */
-.border-internal { border-left: 6px solid #0288d1; } /* Синий */
-.border-public { border-left: 6px solid #00bfa5; }   /* Бирюзовый */
-.border-external { border-left: 6px solid #ff9100; } /* Оранжевый */
-
-.card-tag {
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 5px;
-  margin-bottom: 8px;
-}
+.border-internal { border-left: 5px solid #0288d1; }
+.border-public { border-left: 5px solid #00bfa5; }
+.border-external { border-left: 5px solid #ff9100; }
 
 .tag-internal { background: #e1f5fe; color: #0288d1; }
 .tag-public { background: #e0f2f1; color: #00bfa5; }
 .tag-external { background: #fff3e0; color: #ff9100; }
 
-/* ПОПАП ЛОГИНА */
-.popup {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.popup-content {
-  background: white;
-  padding: 40px;
-  border-radius: 20px;
-  width: 320px;
-  text-align: center;
-}
-
-.popup-content input {
-  width: 100%;
-  padding: 12px;
-  margin: 10px 0;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  box-sizing: border-box;
-}
-
-.popup-content button {
-  width: 100%;
-  padding: 12px;
-  background: #0066ff;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  margin-top: 10px;
-  cursor: pointer;
-}
-
-.error { color: red; font-size: 13px; margin-top: 10px; }
+/* ЛОГИН */
+.popup { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.popup-content { background: white; padding: 30px; border-radius: 15px; width: 300px; text-align: center; }
+.popup-content input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+.popup-content button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+.error { color: red; font-size: 12px; margin-top: 10px; }
