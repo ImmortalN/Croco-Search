@@ -18,6 +18,8 @@ function matchesQuery(text, query) {
 // ====================== УЛУЧШЕННЫЙ INTERCOM ======================
 async function searchIntercom(q) {
     const token = process.env.INTERCOM_TOKEN;
+    const workspaceId = process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox'; // ← очень желательно вынести в .env
+
     if (!token) return [];
 
     const headers = {
@@ -26,51 +28,69 @@ async function searchIntercom(q) {
         'Intercom-Version': 'Unstable'
     };
 
-    let allFound = [];
+    let results = [];
 
     try {
-        // 1. Сначала пробуем официальный поиск (быстрый путь)
+        // ─── Попытка №1: поиск по phrase ───────────────────────────────
         const searchUrl = `https://api.intercom.io/internal_articles/search?phrase=${encodeURIComponent(q)}`;
-        const sRes = await fetch(searchUrl, { headers });
-        const sData = await sRes.json();
-        const searchItems = sData.data || sData.articles || [];
+        const searchRes = await fetch(searchUrl, { method: 'GET', headers });
         
-        searchItems.forEach(a => {
-            allFound.push({
-                title: a.title || a.name,
-                url: a.url || `https://app.intercom.com/a/apps/${process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox'}/articles/articles/${a.id}/show`,
-                source: 'Intercom Internal'
-            });
-        });
+        if (!searchRes.ok) {
+            console.warn(`Intercom search HTTP ${searchRes.status}: ${await searchRes.text()}`);
+        } else {
+            const data = await searchRes.json();
+            // Самый частый вариант структуры в Unstable
+            const articles = data.data || data.articles || [];
 
-        // 2. Если поиск не помог, делаем глубокое сканирование страниц (пагинация)
-        // Проверяем первые 5 страниц по 50 статей (всего 250 последних статей)
-        if (allFound.length === 0) {
-            for (let page = 1; page <= 5; page++) {
+            articles.forEach(article => {
+                const title = article.title || article.name || '(без названия)';
+                // Важно: у внутренних статей нет поля url → формируем вручную
+                const url = `https://app.intercom.com/a/apps/${workspaceId}/articles/articles/${article.id}/show`;
+
+                results.push({
+                    title,
+                    url,
+                    source: 'Intercom Internal'
+                });
+            });
+        }
+
+        // ─── Попытка №2: глубокий поиск (если ничего не нашли) ─────────
+        if (results.length === 0) {
+            console.log('Intercom: основной поиск ничего не дал → запускаем перебор страниц');
+
+            for (let page = 1; page <= 6; page++) {   // можно увеличить до 8–10 при необходимости
                 const listUrl = `https://api.intercom.io/internal_articles?page=${page}&per_page=50`;
-                const lRes = await fetch(listUrl, { headers });
-                const lData = await lRes.json();
-                const articles = lData.data || [];
+                const listRes = await fetch(listUrl, { headers });
+                
+                if (!listRes.ok) break;
+
+                const listData = await listRes.json();
+                const articles = listData.data || [];
 
                 if (articles.length === 0) break;
 
-                const matches = articles.filter(a => matchesQuery(a.title || a.name, q));
+                const matches = articles.filter(a => matchesQuery(a.title || a.name || '', q));
+
                 matches.forEach(a => {
-                    allFound.push({
-                        title: a.title || a.name,
-                        url: a.url || `https://app.intercom.com/a/apps/${process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox'}/articles/articles/${a.id}/show`,
-                        source: 'Intercom Internal (Deep Search)'
+                    const title = a.title || a.name || '(без названия)';
+                    const url = `https://app.intercom.com/a/apps/${workspaceId}/articles/articles/${a.id}/show`;
+
+                    results.push({
+                        title,
+                        url,
+                        source: 'Intercom Internal (deep)'
                     });
                 });
 
-                // Если уже нашли что-то, останавливаемся, чтобы не тормозить сервер
-                if (allFound.length >= 5) break;
+                if (results.length >= 10) break; // ограничиваем, чтобы не висело долго
             }
         }
-    } catch (e) {
-        console.error('Intercom Error:', e.message);
+    } catch (err) {
+        console.error('Intercom fatal error:', err.message);
     }
-    return allFound;
+
+    return results;
 }
 
 // ====================== УЛУЧШЕННЫЙ CLICKUP ======================
