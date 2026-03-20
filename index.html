@@ -3,147 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Поиск по базе знаний</title>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f5f7fa;
-      color: #111;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 40px 20px;
-    }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    /* Поиск */
-    .search-box {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .search-box input {
-      flex: 1;
-      padding: 14px 16px;
-      border-radius: 12px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-    }
-
-    .search-box button {
-      padding: 14px 20px;
-      border: none;
-      border-radius: 12px;
-      background: #0066ff;
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .search-box button:disabled {
-      background: #9bbcff;
-      cursor: not-allowed;
-    }
-
-    /* Sync кнопка */
-    .sync-btn {
-      margin-bottom: 20px;
-      background: #111;
-    }
-
-    /* Loader */
-    .loader {
-      text-align: center;
-      padding: 20px;
-      color: #555;
-    }
-
-    /* Результаты */
-    .results {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .result {
-      background: white;
-      padding: 14px;
-      border-radius: 10px;
-      border-left: 4px solid #0066ff;
-    }
-
-    .result small {
-      color: #777;
-      font-size: 11px;
-      text-transform: uppercase;
-    }
-
-    .result a {
-      display: block;
-      margin: 4px 0;
-      color: #0066cc;
-      font-weight: 600;
-      text-decoration: none;
-    }
-
-    .result a:hover {
-      text-decoration: underline;
-    }
-
-    .snippet {
-      font-size: 13px;
-      color: #555;
-    }
-
-    /* Логин */
-    .popup {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .popup-content {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      width: 320px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .popup-content input {
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-    }
-
-    .error {
-      color: red;
-      font-size: 13px;
-      text-align: center;
-    }
-  </style>
+  <title>Crocoblock Documentation Search</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-<!-- 🔐 LOGIN -->
 <div id="loginPopup" class="popup">
   <div class="popup-content">
-    <h2>Вход</h2>
+    <img src="https://crocoblock.com/wp-content/themes/crocoblock/assets/img/logo.svg" width="150" style="margin-bottom:20px">
+    <h2>Вход в базу знаний</h2>
     <input id="loginUser" placeholder="Логин"/>
     <input id="loginPass" type="password" placeholder="Пароль"/>
     <button id="loginBtn">Войти</button>
@@ -151,33 +19,45 @@
   </div>
 </div>
 
-<!-- 🔍 APP -->
 <div class="container" id="app" style="display:none;">
+  
+  <header>
+    <img src="https://crocoblock.com/wp-content/themes/crocoblock/assets/img/logo.svg" alt="Logo" width="180">
+    <h1>Documentation Search</h1>
+  </header>
 
-  <h1>Поиск по базе знаний</h1>
+  <div class="sync-container">
+    <button class="btn-sync" id="syncBtn" onclick="startSync()">🔄 Обновить базу гайдов</button>
+    
+    <div id="progressWrapper" class="progress-wrapper" style="display:none;">
+      <div class="progress-bar-bg">
+        <div id="progressBar" class="progress-bar-fill"></div>
+      </div>
+      <div id="statusText" class="status-text">Ожидание...</div>
+    </div>
+  </div>
 
   <div class="search-box">
-    <input id="input" placeholder="Например: jetengine dynamic visibility"/>
+    <input id="searchInput" placeholder="Напр: JetEngine dynamic visibility..."/>
     <button id="searchBtn">Найти</button>
   </div>
 
-  <button class="search-box sync-btn" onclick="startSync()">🔄 Обновить базу</button>
-
-  <div id="status" class="loader"></div>
-
-  <div id="results" class="results"></div>
+  <div id="resultsInfo" class="results-info"></div>
+  <div id="resultsList" class="results-list"></div>
 
 </div>
 
 <script>
 const loginPopup = document.getElementById('loginPopup');
 const app = document.getElementById('app');
-const results = document.getElementById('results');
-const statusDiv = document.getElementById('status');
+const resultsList = document.getElementById('resultsList');
+const statusText = document.getElementById('statusText');
+const progressBar = document.getElementById('progressBar');
+const progressWrapper = document.getElementById('progressWrapper');
 
-const STORAGE_KEY = 'auth';
+const STORAGE_KEY = 'croco_auth';
 
-// 🔐 Проверка логина
+// Проверка авторизации
 function checkAuth() {
   if (localStorage.getItem(STORAGE_KEY)) {
     loginPopup.style.display = 'none';
@@ -185,7 +65,7 @@ function checkAuth() {
   }
 }
 
-// 🔐 Логин
+// Кнопка логина
 document.getElementById('loginBtn').onclick = async () => {
   const username = loginUser.value;
   const password = loginPass.value;
@@ -195,65 +75,81 @@ document.getElementById('loginBtn').onclick = async () => {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ username, password })
   });
-
   const data = await res.json();
 
   if (data.success) {
-    localStorage.setItem(STORAGE_KEY, '1');
+    localStorage.setItem(STORAGE_KEY, 'true');
     checkAuth();
   } else {
-    loginError.textContent = 'Неверные данные';
+    document.getElementById('loginError').textContent = 'Неверный логин или пароль';
   }
 };
 
-// 🔍 Поиск
+// Функция поиска
 async function search() {
-  const q = input.value.trim();
+  const q = searchInput.value.trim();
   if (!q) return;
 
-  // ❗ очищаем старые результаты
-  results.innerHTML = '';
-  statusDiv.textContent = 'Ищу...';
-
+  resultsList.innerHTML = '<div class="loading-text">Ищу в базе данных...</div>';
+  
   const res = await fetch('/ask', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ question: q })
   });
-
   const data = await res.json();
 
-  statusDiv.textContent = '';
+  resultsList.innerHTML = '';
+  
+  if (!data.results || data.results.length === 0) {
+    resultsList.innerHTML = '<p class="no-results">Ничего не найдено. Попробуйте изменить запрос.</p>';
+    return;
+  }
 
-  results.innerHTML = data.answer;
+  data.results.forEach(item => {
+    // Определяем текст бейджа и класс для цвета
+    let badgeText = 'Public';
+    if (item.source === 'internal') badgeText = 'Internal';
+    if (item.source === 'external') badgeText = 'Official Guide';
+
+    const card = document.createElement('div');
+    card.className = `result-card border-${item.source}`;
+    card.innerHTML = `
+      <div class="card-tag tag-${item.source}">${badgeText}</div>
+      <a href="${item.url}" target="_blank" class="card-link">${item.title}</a>
+      <div class="card-snippet">${(item.body || '').slice(0, 160)}...</div>
+    `;
+    resultsList.appendChild(card);
+  });
 }
 
-// ⏳ Sync
+// Функция синхронизации
 async function startSync() {
-  results.innerHTML = '';
-  statusDiv.textContent = '⏳ Синхронизация...';
+  progressWrapper.style.display = 'block';
+  resultsList.innerHTML = '';
+  document.getElementById('syncBtn').disabled = true;
 
-  await fetch('/sync');
+  fetch('/sync'); // Запускаем процесс
 
   const interval = setInterval(async () => {
     const res = await fetch('/sync-status');
     const data = await res.json();
 
-    statusDiv.textContent = data.progress;
+    statusText.textContent = `${data.progress} (${data.percent}%)`;
+    progressBar.style.width = data.percent + '%';
 
-    if (!data.loading) {
+    if (!data.loading && data.percent === 100) {
       clearInterval(interval);
-      statusDiv.textContent = '✅ Готово!';
+      statusText.textContent = '✅ База успешно обновлена!';
+      document.getElementById('syncBtn').disabled = false;
+      setTimeout(() => { progressWrapper.style.display = 'none'; }, 3000);
     }
   }, 1000);
 }
 
-// Enter
-input.addEventListener('keydown', e => {
-  if (e.key === 'Enter') search();
-});
-
-searchBtn.onclick = search;
+// Слушатели событий
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+document.getElementById('searchBtn').onclick = search;
 
 checkAuth();
 </script>
