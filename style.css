@@ -1,22 +1,155 @@
-/* Базовые стили */
-* {
-  box-sizing: border-box;
-}
-
-body, html {
+/* ОБЩИЕ СТИЛИ */
+body {
   margin: 0;
-  padding: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f7fa;
-  color: #111;
-  min-height: 100vh;
+  background: #f0f2f5;
+  color: #1c1e21;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Попап логина */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+header h1 {
+  font-size: 24px;
+  color: #333;
+  margin-top: 10px;
+}
+
+/* ПОИСК */
+.search-box {
+  display: flex;
+  gap: 10px;
+  background: white;
+  padding: 10px;
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin-bottom: 30px;
+}
+
+.search-box input {
+  flex: 1;
+  border: none;
+  padding: 12px;
+  font-size: 16px;
+  outline: none;
+}
+
+.search-box button {
+  background: #0066ff;
+  color: white;
+  border: none;
+  padding: 0 25px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* СИНХРОНИЗАЦИЯ И ПРОГРЕСС */
+.sync-container {
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+.btn-sync {
+  background: #f7f9fc;
+  border: 1px solid #dcdfe6;
+  padding: 8px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-sync:disabled { opacity: 0.6; }
+
+.progress-wrapper {
+  margin-top: 15px;
+  text-align: left;
+}
+
+.progress-bar-bg {
+  background: #e0e4e9;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.progress-bar-fill {
+  background: #00c2ff;
+  width: 0%;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.status-text {
+  font-size: 12px;
+  color: #666;
+}
+
+/* КАРТОЧКИ РЕЗУЛЬТАТОВ */
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.result-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  position: relative;
+}
+
+.card-link {
+  font-size: 18px;
+  color: #0066ff;
+  text-decoration: none;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.card-link:hover { text-decoration: underline; }
+
+.card-snippet {
+  font-size: 14px;
+  color: #4b4f56;
+  line-height: 1.5;
+}
+
+/* ЦВЕТА ПО ТИПАМ */
+.border-internal { border-left: 6px solid #0288d1; } /* Синий */
+.border-public { border-left: 6px solid #00bfa5; }   /* Бирюзовый */
+.border-external { border-left: 6px solid #ff9100; } /* Оранжевый */
+
+.card-tag {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+}
+
+.tag-internal { background: #e1f5fe; color: #0288d1; }
+.tag-public { background: #e0f2f1; color: #00bfa5; }
+.tag-external { background: #fff3e0; color: #ff9100; }
+
+/* ПОПАП ЛОГИНА */
 .popup {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,131 +158,31 @@ body, html {
 
 .popup-content {
   background: white;
-  padding: 30px;
-  border-radius: 12px;
+  padding: 40px;
+  border-radius: 20px;
   width: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-}
-
-.popup-content h2 {
-  margin: 0;
-  font-size: 22px;
   text-align: center;
 }
 
 .popup-content input {
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  font-size: 15px;
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  box-sizing: border-box;
 }
 
-#error {
-  color: red;
-  font-size: 13px;
-  text-align: center;
-}
-
-/* Основной контейнер поиска */
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 40px 20px;
-}
-
-/* Заголовок */
-h1 {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-/* Поисковая строка */
-.search-box {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.search-box input {
-  flex: 1;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid #ccc;
-  font-size: 16px;
-}
-
-.search-box button {
-  padding: 14px 20px;
-  border: none;
-  border-radius: 12px;
+.popup-content button {
+  width: 100%;
+  padding: 12px;
   background: #0066ff;
   color: white;
+  border: none;
+  border-radius: 10px;
   font-weight: 600;
+  margin-top: 10px;
   cursor: pointer;
 }
 
-.search-box button:disabled {
-  background: #9bbcff;
-  cursor: not-allowed;
-}
-
-/* Sync кнопка */
-.sync-btn {
-  background: #111;
-  color: #fff;
-  margin-bottom: 20px;
-}
-
-/* Loader */
-.loader {
-  text-align: center;
-  padding: 20px;
-  color: #555;
-}
-
-/* Результаты */
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.result {
-  background: white;
-  padding: 14px;
-  border-radius: 10px;
-  border-left: 4px solid #0066ff;
-}
-
-.result small {
-  color: #777;
-  font-size: 11px;
-  text-transform: uppercase;
-}
-
-.result a {
-  display: block;
-  margin: 4px 0;
-  color: #0066cc;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.result a:hover {
-  text-decoration: underline;
-}
-
-.snippet {
-  font-size: 13px;
-  color: #555;
-}
-
-/* Мобильная адаптация */
-@media (max-width: 500px) {
-  .search-box input { font-size: 14px; }
-  .search-box button { font-size: 14px; }
-  .container { padding: 20px 12px; }
-}
+.error { color: red; font-size: 13px; margin-top: 10px; }
