@@ -1,125 +1,120 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Knowledge Base Search</title>
+  <meta charset="UTF-8">
+  <title>Knowledge Base</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="loginPopup" class="popup">
   <div class="popup-content">
-    <h2>Вход в систему</h2>
-    <input id="loginUser" placeholder="Логин"/>
-    <input id="loginPass" type="password" placeholder="Пароль"/>
-    <button id="loginBtn">Войти</button>
+    <h2>Авторизация</h2>
+    <input id="loginUser" placeholder="Логин">
+    <input id="loginPass" type="password" placeholder="Пароль">
+    <button onclick="login()">Войти</button>
     <div id="loginError" class="error"></div>
   </div>
 </div>
 
 <div class="container" id="app" style="display:none;">
-  
   <header>
-    <h1>Поиск по базе знаний</h1>
+    <h1>База знаний</h1>
   </header>
 
-  <div class="sync-info">
-    <div class="progress-container">
-      <div class="progress-bar-bg">
-        <div id="progressBar" class="progress-bar-fill"></div>
+  <div class="sync-panel">
+    <div class="progress-box">
+      <div class="bar-container">
+        <div id="progressBar" class="bar-fill"></div>
       </div>
-      <div id="statusText" class="status-text">Инициализация...</div>
+      <div id="statusLabel" class="status-label">Проверка базы...</div>
     </div>
-    <button class="mini-sync-btn" onclick="triggerSync()">🔄 Обновить вручную</button>
+    <button class="sync-btn" onclick="startSync()">🔄 Обновить</button>
   </div>
 
-  <div class="search-box">
-    <input id="searchInput" placeholder="Введите ваш вопрос..."/>
-    <button id="searchBtn">Найти</button>
+  <div class="search-area">
+    <input id="searchInput" placeholder="Поиск по всем гайдам...">
+    <button onclick="search()">Найти</button>
   </div>
 
-  <div id="resultsList" class="results-list"></div>
-
+  <div id="results" class="results-grid"></div>
 </div>
 
 <script>
-const STORAGE_KEY = 'croco_auth';
+const STORAGE_KEY = 'kb_auth';
 
-function checkAuth() {
-  if (localStorage.getItem(STORAGE_KEY)) {
-    loginPopup.style.display = 'none';
-    app.style.display = 'block';
-    monitorSync(); // Запуск мониторинга сразу после входа
-  }
-}
-
-document.getElementById('loginBtn').onclick = async () => {
+async function login() {
   const res = await fetch('/login', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ username: loginUser.value, password: loginPass.value })
   });
   const data = await res.json();
-  if (data.success) { localStorage.setItem(STORAGE_KEY, 'true'); checkAuth(); }
-  else { document.getElementById('loginError').textContent = 'Ошибка входа'; }
-};
+  if (data.success) {
+    localStorage.setItem(STORAGE_KEY, '1');
+    initApp();
+  } else {
+    loginError.innerText = 'Ошибка';
+  }
+}
 
-// Функция мониторинга прогресса
-async function monitorSync() {
-  const interval = setInterval(async () => {
+function initApp() {
+  loginPopup.style.display = 'none';
+  app.style.display = 'block';
+  startStatusPolling();
+}
+
+async function startStatusPolling() {
+  setInterval(async () => {
     const res = await fetch('/sync-status');
     const data = await res.json();
-
-    document.getElementById('progressBar').style.width = data.percent + '%';
-    document.getElementById('statusText').textContent = `${data.progress} (${data.percent}%)`;
-
-    // Если база пустая или не загружается - пнуть сервер
-    if (!data.loading && data.percent === 0) { fetch('/sync'); }
-
-    if (!data.loading && data.percent === 100) {
-      document.getElementById('statusText').textContent = '✅ База актуальна';
-      // Не останавливаем интервал совсем, проверяем раз в 30 сек на всякий случай
+    
+    progressBar.style.width = data.percent + '%';
+    statusLabel.innerText = `${data.progress} (${data.percent}%)`;
+    
+    // Если сервер ничего не делает и база пустая - запускаем
+    if (!data.loading && data.percent === 0) {
+      fetch('/sync');
     }
   }, 1000);
 }
 
-async function triggerSync() {
-  fetch('/sync');
+async function startSync() {
+  await fetch('/sync');
 }
 
 async function search() {
   const q = searchInput.value.trim();
   if (!q) return;
-  resultsList.innerHTML = '<div class="loading">Поиск...</div>';
+  
+  results.innerHTML = 'Загрузка...';
   const res = await fetch('/ask', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ question: q })
   });
   const data = await res.json();
-  resultsList.innerHTML = '';
-  if (!data.results.length) { resultsList.innerHTML = 'Ничего не найдено'; return; }
+  
+  results.innerHTML = '';
+  if (!data.results.length) {
+    results.innerHTML = 'Ничего не найдено';
+    return;
+  }
 
   data.results.forEach(item => {
-    let label = 'Public';
-    if (item.source === 'internal') label = 'Internal';
-    if (item.source === 'external') label = 'Website Guide';
-
-    const card = document.createElement('div');
-    card.className = `result-card border-${item.source}`;
-    card.innerHTML = `
-      <div class="tag tag-${item.source}">${label}</div>
-      <a href="${item.url}" target="_blank">${item.title}</a>
-      <p>${(item.body || '').slice(0, 150)}...</p>
-    `;
-    resultsList.appendChild(card);
+    let type = item.source === 'internal' ? 'Внутренний' : (item.source === 'external' ? 'Сайт' : 'Публичный');
+    results.innerHTML += `
+      <div class="card card-${item.source}">
+        <span class="badge badge-${item.source}">${type}</span>
+        <a href="${item.url}" target="_blank">${item.title}</a>
+        <p>${item.body.substring(0, 140)}...</p>
+      </div>`;
   });
 }
 
-searchInput.addEventListener('keydown', e => e.key === 'Enter' && search());
-document.getElementById('searchBtn').onclick = search;
-checkAuth();
+searchInput.onkeydown = (e) => e.key === 'Enter' && search();
+
+if (localStorage.getItem(STORAGE_KEY)) initApp();
 </script>
 </body>
 </html>
