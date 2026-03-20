@@ -1,89 +1,110 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Поиск по гайдам Crocoblock</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Поиск по базе знаний</title>
+
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f4f7f9;
       margin: 0;
-      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f7fa;
+      color: #111;
     }
-    .chat-container {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
+
+    .container {
       max-width: 900px;
       margin: 0 auto;
-      background: white;
-      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+      padding: 40px 20px;
     }
-    .chat-header {
-      padding: 16px 20px;
-      background: #007cba;
-      color: white;
-      font-size: 18px;
-      font-weight: 600;
+
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
     }
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-    }
-    .message {
-      margin-bottom: 16px;
+
+    /* Поиск */
+    .search-box {
       display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
     }
-    .message.user {
-      justify-content: flex-end;
-    }
-    .message-content {
-      max-width: 80%;
-      padding: 12px 16px;
-      border-radius: 18px;
-      font-size: 15px;
-      line-height: 1.45;
-    }
-    .user .message-content {
-      background: #007cba;
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-    .bot .message-content {
-      background: #f0f2f5;
-      color: #111;
-      border-bottom-left-radius: 4px;
-    }
-    .input-area {
-      padding: 16px 20px;
-      display: flex;
-      gap: 12px;
-      border-top: 1px solid #eee;
-      background: white;
-    }
-    input {
+
+    .search-box input {
       flex: 1;
-      padding: 12px 16px;
-      border: 1px solid #ddd;
-      border-radius: 24px;
-      font-size: 15px;
-      outline: none;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      font-size: 16px;
     }
-    button {
-      padding: 12px 24px;
-      background: #007cba;
-      color: white;
+
+    .search-box button {
+      padding: 14px 20px;
       border: none;
-      border-radius: 24px;
-      font-weight: 500;
+      border-radius: 12px;
+      background: #0066ff;
+      color: white;
+      font-weight: 600;
       cursor: pointer;
     }
-    button:disabled {
-      background: #a0cfff;
+
+    .search-box button:disabled {
+      background: #9bbcff;
       cursor: not-allowed;
     }
+
+    /* Sync кнопка */
+    .sync-btn {
+      margin-bottom: 20px;
+      background: #111;
+    }
+
+    /* Loader */
+    .loader {
+      text-align: center;
+      padding: 20px;
+      color: #555;
+    }
+
+    /* Результаты */
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .result {
+      background: white;
+      padding: 14px;
+      border-radius: 10px;
+      border-left: 4px solid #0066ff;
+    }
+
+    .result small {
+      color: #777;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .result a {
+      display: block;
+      margin: 4px 0;
+      color: #0066cc;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .result a:hover {
+      text-decoration: underline;
+    }
+
+    .snippet {
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* Логин */
     .popup {
       position: fixed;
       inset: 0;
@@ -91,227 +112,151 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
     }
+
     .popup-content {
       background: white;
-      padding: 32px;
-      border-radius: 16px;
-      width: 360px;
-      max-width: 90%;
+      padding: 30px;
+      border-radius: 12px;
+      width: 320px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      gap: 12px;
     }
-    .popup-content h2 {
-      margin: 0;
-      text-align: center;
-    }
+
     .popup-content input {
-      padding: 12px;
-      border: 1px solid #ccc;
+      padding: 10px;
       border-radius: 8px;
-      font-size: 15px;
+      border: 1px solid #ccc;
     }
-    .remember {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-    }
-    #loginError {
-      color: #d32f2f;
+
+    .error {
+      color: red;
       font-size: 13px;
       text-align: center;
-      min-height: 18px;
-    }
-    .result-source {
-      font-size: 11px;
-      color: #666;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-      display: block;
-    }
-    .result-link {
-      color: #0066cc;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .result-link:hover {
-      text-decoration: underline;
-    }
-    .snippet {
-      color: #555;
-      font-size: 13px;
-      margin-top: 4px;
     }
   </style>
 </head>
+
 <body>
 
-  <!-- Попап логина -->
-  <div id="loginPopup" class="popup">
-    <div class="popup-content">
-      <h2>Вход в поиск</h2>
-      <input type="text" id="loginUser" placeholder="Логин" autocomplete="username" />
-      <input type="password" id="loginPass" placeholder="Пароль" autocomplete="current-password" />
-      <label class="remember">
-        <input type="checkbox" id="rememberMe" checked />
-        Запомнить меня (7 дней)
-      </label>
-      <button id="loginBtn">Войти</button>
-      <p id="loginError"></p>
-    </div>
+<!-- 🔐 LOGIN -->
+<div id="loginPopup" class="popup">
+  <div class="popup-content">
+    <h2>Вход</h2>
+    <input id="loginUser" placeholder="Логин"/>
+    <input id="loginPass" type="password" placeholder="Пароль"/>
+    <button id="loginBtn">Войти</button>
+    <div id="loginError" class="error"></div>
+  </div>
+</div>
+
+<!-- 🔍 APP -->
+<div class="container" id="app" style="display:none;">
+
+  <h1>Поиск по базе знаний</h1>
+
+  <div class="search-box">
+    <input id="input" placeholder="Например: jetengine dynamic visibility"/>
+    <button id="searchBtn">Найти</button>
   </div>
 
-  <!-- Основной контейнер поиска (скрыт до логина) -->
-  <div class="chat-container" id="chatContainer" style="display: none;">
-    <div class="chat-header">Поиск по гайдам, статьям и задачам</div>
-    <div id="chat" class="chat-messages"></div>
-    <div class="input-area">
-      <input type="text" id="question" placeholder="Например: jetengine dynamic visibility" autocomplete="off" />
-      <button id="askBtn">Найти</button>
-    </div>
-  </div>
+  <button class="search-box sync-btn" onclick="startSync()">🔄 Обновить базу</button>
 
-  <script>
-    const loginPopup = document.getElementById('loginPopup');
-    const chatContainer = document.getElementById('chatContainer');
-    const chatDiv = document.getElementById('chat');
-    const input = document.getElementById('question');
-    const askBtn = document.getElementById('askBtn');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginError = document.getElementById('loginError');
+  <div id="status" class="loader"></div>
 
-    const STORAGE_KEY = 'crocoSearchAuth';
-    const STORAGE_EXPIRE_KEY = 'crocoSearchExpire';
+  <div id="results" class="results"></div>
 
-    // Проверяем, залогинен ли пользователь
-    function checkAuth() {
-      const authData = localStorage.getItem(STORAGE_KEY);
-      const expire = localStorage.getItem(STORAGE_EXPIRE_KEY);
-      const now = Date.now();
+</div>
 
-      if (authData && expire && now < Number(expire)) {
-        loginPopup.style.display = 'none';
-        chatContainer.style.display = 'flex';
-        addMessage('Добро пожаловать обратно! Задавайте вопрос.', false);
-        return true;
-      }
-      // истёк или нет данных → показываем логин
-      loginPopup.style.display = 'flex';
-      chatContainer.style.display = 'none';
-      return false;
+<script>
+const loginPopup = document.getElementById('loginPopup');
+const app = document.getElementById('app');
+const results = document.getElementById('results');
+const statusDiv = document.getElementById('status');
+
+const STORAGE_KEY = 'auth';
+
+// 🔐 Проверка логина
+function checkAuth() {
+  if (localStorage.getItem(STORAGE_KEY)) {
+    loginPopup.style.display = 'none';
+    app.style.display = 'block';
+  }
+}
+
+// 🔐 Логин
+document.getElementById('loginBtn').onclick = async () => {
+  const username = loginUser.value;
+  const password = loginPass.value;
+
+  const res = await fetch('/login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username, password })
+  });
+
+  const data = await res.json();
+
+  if (data.success) {
+    localStorage.setItem(STORAGE_KEY, '1');
+    checkAuth();
+  } else {
+    loginError.textContent = 'Неверные данные';
+  }
+};
+
+// 🔍 Поиск
+async function search() {
+  const q = input.value.trim();
+  if (!q) return;
+
+  // ❗ очищаем старые результаты
+  results.innerHTML = '';
+  statusDiv.textContent = 'Ищу...';
+
+  const res = await fetch('/ask', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ question: q })
+  });
+
+  const data = await res.json();
+
+  statusDiv.textContent = '';
+
+  results.innerHTML = data.answer;
+}
+
+// ⏳ Sync
+async function startSync() {
+  results.innerHTML = '';
+  statusDiv.textContent = '⏳ Синхронизация...';
+
+  await fetch('/sync');
+
+  const interval = setInterval(async () => {
+    const res = await fetch('/sync-status');
+    const data = await res.json();
+
+    statusDiv.textContent = data.progress;
+
+    if (!data.loading) {
+      clearInterval(interval);
+      statusDiv.textContent = '✅ Готово!';
     }
+  }, 1000);
+}
 
-    // Добавляем сообщение в чат
-    function addMessage(content, isUser = false) {
-      const msg = document.createElement('div');
-      msg.className = `message ${isUser ? 'user' : 'bot'}`;
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      contentDiv.innerHTML = content;
-      msg.appendChild(contentDiv);
-      chatDiv.appendChild(msg);
-      chatDiv.scrollTop = chatDiv.scrollHeight;
-    }
+// Enter
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') search();
+});
 
-    // Логика отправки вопроса
-    async function handleSearch() {
-      const q = input.value.trim();
-      if (!q) return;
+searchBtn.onclick = search;
 
-      addMessage(q, true);
-      input.value = '';
-      askBtn.disabled = true;
+checkAuth();
+</script>
 
-      const loader = document.createElement('div');
-      loader.className = 'message bot';
-      loader.innerHTML = '<div class="message-content">Ищу...</div>';
-      chatDiv.appendChild(loader);
-      chatDiv.scrollTop = chatDiv.scrollHeight;
-
-      try {
-        const res = await fetch('/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q })
-        });
-
-        if (!res.ok) {
-          throw new Error('Сервер вернул ошибку');
-        }
-
-        const data = await res.json();
-        loader.remove();
-        addMessage(data.answer || 'Результатов нет.', false);
-      } catch (err) {
-        loader.remove();
-        addMessage('Ошибка соединения. Попробуйте позже.', false);
-      } finally {
-        askBtn.disabled = false;
-        input.focus();
-      }
-    }
-
-    // Обработка логина
-    loginBtn.addEventListener('click', async () => {
-      const username = document.getElementById('loginUser').value.trim();
-      const password = document.getElementById('loginPass').value.trim();
-      const remember = document.getElementById('rememberMe').checked;
-
-      if (!username || !password) {
-        loginError.textContent = 'Заполните логин и пароль';
-        return;
-      }
-
-      loginError.textContent = '';
-
-      try {
-        const res = await fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, remember })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          // Сохраняем флаг авторизации
-          localStorage.setItem(STORAGE_KEY, 'true');
-
-          // Устанавливаем срок действия (7 дней или навсегда)
-          if (remember) {
-            const expire = Date.now() + 7 * 24 * 60 * 60 * 1000;
-            localStorage.setItem(STORAGE_EXPIRE_KEY, expire);
-          } else {
-            // без remember — до закрытия браузера (localStorage всё равно живёт)
-            localStorage.removeItem(STORAGE_EXPIRE_KEY);
-          }
-
-          loginPopup.style.display = 'none';
-          chatContainer.style.display = 'flex';
-          addMessage('Успешный вход! Задавайте вопрос.', false);
-          input.focus();
-        } else {
-          loginError.textContent = 'Неверный логин или пароль';
-        }
-      } catch (err) {
-        loginError.textContent = 'Ошибка соединения с сервером';
-      }
-    });
-
-    // События
-    askBtn.addEventListener('click', handleSearch);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !askBtn.disabled) handleSearch();
-    });
-
-    // Проверка при загрузке страницы
-    window.addEventListener('load', () => {
-      checkAuth();
-    });
-  </script>
 </body>
 </html>
