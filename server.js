@@ -35,111 +35,82 @@ db.serialize(() => {
 // ─── Полная выгрузка всех internal articles из Intercom ─────────────────────
 async function loadAllIntercomArticles() {
   const token = process.env.INTERCOM_TOKEN;
-  if (!token) throw new Error('INTERCOM_TOKEN не задан');
+  if (!token) throw new Error('INTERCOM_TOKEN не задан в .env');
 
   const workspace = process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox';
   const headers = {
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/json',
-    'Intercom-Version': 'Unstable'  // или '2.14' — протестируй оба
+    'Intercom-Version': 'Unstable'   // если не пойдёт — попробуй '2.14'
   };
 
-  let articles = [];
+  let allArticles = [];
   let startingAfter = null;
   let page = 0;
+  let hasMore = true;
 
-  console.log('🚀 Полная синхронизация Intercom internal_articles');
+  console.log('🚀 Запуск полной синхронизации Intercom internal_articles');
 
-  while (true) {  // бесконечный цикл, выход по break
+  while (hasMore) {
     page++;
-    const params = new URLSearchParams({ per_page: '150' });
+    const params = new URLSearchParams({
+      per_page: '150'
+    });
     if (startingAfter) {
       params.append('starting_after', startingAfter);
     }
 
-    const url = `https://api.intercom.io/internal_articles?${params}`;
-    console.log(`Страница ${page}: ${url}`);
+    const url = `https://api.intercom.io/internal_articles?${params.toString()}`;
+    console.log(`📄 Страница ${page} | URL: ${url}`);
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Intercom ${res.status}: ${err}`);
-    }
-
-    const data = await res.json();
-    const pageItems = data.data || data.articles || data.internal_articles || [];
-
-    console.log(`  Получено: ${pageItems.length} статей`);
-
-    pageItems.forEach(item => {
-      articles.push({
-        id: item.id,
-        title: item.title || '(без заголовка)',
-        body: (item.body || item.description || '').replace(/<[^>]*>/g, ' ').trim(),
-        url: `https://app.intercom.com/a/apps/${workspace}/articles/articles/${item.id}/show`
-      });
-    });
-
-    // Ключевой момент: берём курсор ТОЛЬКО если pages.next существует
-    if (data.pages && data.pages.next && data.pages.next.starting_after) {
-      startingAfter = data.pages.next.starting_after;
-      console.log(`  Курсор найден → следующая страница`);
-    } else {
-      console.log(`  Курсор отсутствует → конец списка`);
-      break;
-    }
-  }
-
-  console.log(`✅ Итого статей: ${articles.length}`);
-  return articles;
-}
-
-// ─── Эндпоинт для ручной синхронизации ─────────────────────────────────────
-app.get('/sync', async (req, res) => {
-  try {
-    const articles = await loadAllIntercomArticles();
-
-    // Очистка + вставка
-    db.run('DELETE FROM articles');
-    const stmt = db.prepare('INSERT INTO articles (id, title, body, url) VALUES (?, ?, ?, ?)');
-    articles.forEach(a => stmt.run(a.id, a.title, a.body, a.url));
-    stmt.finalize();
-
-    res.send(`
-      <h2 style="color:#2e7d32">Готово!</h2>
-      <p>Загружено <strong>${articles.length}</strong> статей из Intercom</p>
-      <p>Теперь можно искать через форму на главной странице</p>
-      <p><a href="/">← На главную</a></p>
-    `);
-  } catch (err) {
-    console.error('Ошибка /sync:', err);
-    res.status(500).send(`<h2>Ошибка</h2><pre>${err.message}</pre>`);
-  }
-});
-
-// ─── Поиск по SQLite ───────────────────────────────────────────────────────
-function searchIntercom(question) {
-  return new Promise((resolve) => {
-    db.all(
-      `SELECT title, url, body, rank
-       FROM articles
-       WHERE articles MATCH ?
-       ORDER BY rank LIMIT 15`,
-      [question.trim() + '*'],
-      (err, rows) => {
-        if (err) {
-          console.error('SQLite search error:', err);
-          return resolve([]);
-        }
-        resolve(rows.map(r => ({
-          title: r.title,
-          url: r.url,
-          source: 'Intercom',
-          snippet: (r.body || '').substring(0, 160) + (r.body.length > 160 ? '…' : '')
-        })));
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Intercom ошибка ${res.status}: ${errText}`);
       }
-    );
-  });
+
+      const data = await res.json();
+      const pageArticles = data.data || data.articles || data.internal_articles || [];
+
+      console.log(`   Получено статей на странице: ${pageArticles.length}`);
+      console.log(`   Общее количество на данный момент: ${allArticles.length + pageArticles.length}`);
+
+      // Добавляем статьи
+      pageArticles.forEach(a => {
+        allArticles.push({
+          id: a.id,
+          title: a.title || '(без заголовка)',
+          body: (a.body || a.description || '').replace(/<[^>]+>/g, ' ').trim(),
+          url: `https://app.intercom.com/a/apps/${workspace}/articles/articles/${a.id}/show`
+        });
+      });
+
+      // Проверяем, есть ли следующая страница
+      const nextPage = data.pages?.next;
+      if (nextPage && nextPage.starting_after) {
+        startingAfter = nextPage.starting_after;
+        console.log(`   Есть следующая страница (starting_after = ${startingAfter.substring(0, 20)}...)`);
+        await new Promise(resolve => setTimeout(resolve, 1200)); // задержка 1.2 сек
+      } else {
+        console.log('   Нет следующей страницы (pages.next или starting_after отсутствует)');
+        hasMore = false;
+      }
+
+      // Дополнительная защита: если пришло меньше 150, скорее всего конец
+      if (pageArticles.length < 150) {
+        console.log('   Получено меньше 150 статей → вероятно последняя страница');
+        hasMore = false;
+      }
+
+    } catch (err) {
+      console.error(`   Ошибка на странице ${page}:`, err.message);
+      hasMore = false;
+    }
+  }
+
+  console.log(`🎉 Синхронизация завершена. Всего статей: ${allArticles.length}`);
+  return allArticles;
 }
 
 // ─── Поиск по ClickUp (строгий фильтр по словам) ────────────────────────────
