@@ -1,5 +1,6 @@
 body { font-family: -apple-system, system-ui, sans-serif; background: #f4f7f9; margin: 0; color: #333; }
-.container { max-width: 850px; margin: 0 auto; padding: 40px 20px; }
+.container { max-width: 850px; margin: 0 auto; padding: 40px 20px; position: relative; 
+  z-index: 10; /* Основной контент теперь выше всего */}
 header h1 { text-align: center; margin-top: 0; color: #2c3e50; font-size: 28px; }
 
 /* ПАНЕЛЬ СТАТУСА */
@@ -31,7 +32,8 @@ header h1 { text-align: center; margin-top: 0; color: #2c3e50; font-size: 28px; 
 .sync-btn:active { transform: translateY(1px); }
 
 /* ПОИСК */
-.search-area { display: flex; gap: 10px; margin-bottom: 30px; }
+.search-area { display: flex; gap: 10px; margin-bottom: 30px; position: relative;
+  z-index: 20;}
 .search-area input { 
   flex: 1; 
   padding: 15px; 
@@ -88,7 +90,7 @@ header h1 { text-align: center; margin-top: 0; color: #2c3e50; font-size: 28px; 
 .no-results { text-align: center; color: #e74c3c; padding: 20px; font-weight: 500; }
 
 /* ЛОГИН */
-.popup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+.popup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); pointer-events: all; }
 .popup-content { background: white; padding: 40px; border-radius: 20px; width: 320px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
 .popup-content h2 { margin-top: 0; color: #2c3e50; }
 .popup-content input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
