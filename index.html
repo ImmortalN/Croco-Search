@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Knowledge Base</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -10,17 +9,17 @@
 
 <div id="loginPopup" class="popup">
   <div class="popup-content">
-    <h2>Авторизация</h2>
-    <input id="loginUser" type="text" placeholder="Логин">
-    <input id="loginPass" type="password" placeholder="Пароль">
-    <button id="loginBtn" onclick="login()">Войти</button>
+    <h2>Login</h2>
+    <input id="loginUser" type="text" placeholder="Username">
+    <input id="loginPass" type="password" placeholder="Password">
+    <button onclick="login()">Sign In</button>
     <div id="loginError" class="error"></div>
   </div>
 </div>
 
 <div class="container" id="app" style="display:none;">
   <header>
-    <h1>База знаний</h1>
+    <h1>Knowledge Base</h1>
   </header>
 
   <div class="sync-panel">
@@ -28,14 +27,14 @@
       <div class="bar-container">
         <div id="progressBar" class="bar-fill"></div>
       </div>
-      <div id="statusLabel" class="status-label">Инициализация...</div>
+      <div id="statusLabel" class="status-label">Initializing...</div>
     </div>
-    <button class="sync-btn" onclick="startSync()">🔄 Обновить базу</button>
+    <button class="sync-btn" onclick="startSync()">🔄 Refresh Base</button>
   </div>
 
   <div class="search-area">
-    <input id="searchInput" type="text" placeholder="Поиск по всем гайдам (напр. JetEngine)...">
-    <button id="searchBtn" onclick="search()">Найти</button>
+    <input id="searchInput" type="text" placeholder="Search guides (e.g. JetEngine)...">
+    <button onclick="search()">Search</button>
   </div>
 
   <div id="results" class="results-grid"></div>
@@ -43,121 +42,78 @@
 
 <script>
 const STORAGE_KEY = 'kb_auth';
-const resultsDiv = document.getElementById('results');
-const searchInput = document.getElementById('searchInput');
 
-// --- ЛОГИКА ВХОДА ---
 async function login() {
   const user = document.getElementById('loginUser').value;
   const pass = document.getElementById('loginPass').value;
-  const errorDiv = document.getElementById('loginError');
-
-  try {
-    const res = await fetch('/login', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ username: user, password: pass })
-    });
-    const data = await res.json();
-    
-    if (data.success) {
-      localStorage.setItem(STORAGE_KEY, '1');
-      initApp();
-    } else {
-      errorDiv.innerText = 'Неверные данные';
-    }
-  } catch (e) {
-    errorDiv.innerText = 'Ошибка сервера';
-  }
+  const res = await fetch('/login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username: user, password: pass })
+  });
+  const data = await res.json();
+  if (data.success) { localStorage.setItem(STORAGE_KEY, '1'); initApp(); }
+  else { document.getElementById('loginError').innerText = 'Invalid credentials'; }
 }
 
-// --- ЗАПУСК ПРИЛОЖЕНИЯ ---
 function initApp() {
   document.getElementById('loginPopup').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  searchInput.focus();
+  document.getElementById('searchInput').focus();
   startStatusPolling();
 }
 
-// --- МОНИТОРИНГ СИНХРОНИЗАЦИИ ---
 function startStatusPolling() {
-  const bar = document.getElementById('progressBar');
-  const label = document.getElementById('statusLabel');
-
   setInterval(async () => {
     try {
       const res = await fetch('/sync-status');
       const data = await res.json();
-      
-      bar.style.width = data.percent + '%';
-      label.innerText = `${data.progress} (${data.percent}%)`;
-      
-      // Авто-старт если база пуста
-      if (!data.loading && data.percent === 0) {
-        fetch('/sync');
-      }
-    } catch (e) {
-      console.log('Статус недоступен');
-    }
-  }, 2000); // Опрашиваем чуть реже, чтобы не грузить сеть
+      document.getElementById('progressBar').style.width = data.percent + '%';
+      document.getElementById('statusLabel').innerText = `${data.progress} (${data.percent}%)`;
+      if (!data.loading && data.percent === 0) fetch('/sync');
+    } catch (e) {}
+  }, 2000);
 }
 
-async function startSync() {
-  await fetch('/sync');
-}
+async function startSync() { await fetch('/sync'); }
 
-// --- ПОИСК ---
 async function search() {
-  const query = searchInput.value.trim();
+  const query = document.getElementById('searchInput').value.trim();
   if (!query) return;
+  const resultsDiv = document.getElementById('results');
+  resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
   
-  resultsDiv.innerHTML = '<div class="loading">Ищу...</div>';
-  
-  try {
-    const res = await fetch('/ask', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ question: query })
-    });
-    
-    const data = await res.json();
-    resultsDiv.innerHTML = '';
+  const res = await fetch('/ask', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ question: query })
+  });
+  const data = await res.json();
+  resultsDiv.innerHTML = '';
 
-    if (!data.results || data.results.length === 0) {
-      resultsDiv.innerHTML = '<p class="no-results">Ничего не найдено по этому запросу.</p>';
-      return;
-    }
-
-    data.results.forEach(item => {
-      let typeLabel = 'Публичный';
-      if (item.source === 'internal') typeLabel = 'Внутренний';
-      if (item.source === 'external') typeLabel = 'Сайт (Guide)';
-
-      const card = document.createElement('div');
-      card.className = `card card-${item.source}`;
-      card.innerHTML = `
-        <span class="badge badge-${item.source}">${typeLabel}</span>
-        <a href="${item.url}" target="_blank">${item.title || 'Без заголовка'}</a>
-        <p>${(item.body || '').substring(0, 160)}...</p>
-      `;
-      resultsDiv.appendChild(card);
-    });
-  } catch (e) {
-    resultsDiv.innerHTML = '<p class="error">Ошибка при поиске. Попробуйте позже.</p>';
+  if (!data.results.length) {
+    resultsDiv.innerHTML = '<p class="no-results">No results found.</p>';
+    return;
   }
+
+  data.results.forEach(item => {
+    let typeLabel = 'Public';
+    if (item.source === 'internal') typeLabel = 'Internal';
+    if (item.source === 'external') typeLabel = 'Website (Guide)';
+
+    const card = document.createElement('div');
+    card.className = `card card-${item.source}`;
+    card.innerHTML = `
+      <span class="badge badge-${item.source}">${typeLabel}</span>
+      <a href="${item.url}" target="_blank">${item.title}</a>
+      <p>${item.body.substring(0, 160)}...</p>
+    `;
+    resultsDiv.appendChild(card);
+  });
 }
 
-// Поиск по Enter
-searchInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    search();
-  }
-});
-
-// Проверка сессии при загрузке
-if (localStorage.getItem(STORAGE_KEY)) {
-  initApp();
-}
+document.getElementById('searchInput').onkeydown = (e) => e.key === 'Enter' && search();
+if (localStorage.getItem(STORAGE_KEY)) initApp();
 </script>
 </body>
 </html>
