@@ -9,14 +9,18 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
-// ─── SQLite ─────────────────────────────────────────────
-const db = new sqlite3.Database('./intercom.db', (err) => {
-  if (err) {
-    console.error('❌ SQLite ошибка:', err.message);
-  } else {
-    console.log('✅ SQLite подключен');
-  }
-});
+// ─────────────────────────────
+// 📊 СТАТУС СИНХРОНИЗАЦИИ
+// ─────────────────────────────
+let syncStatus = {
+  loading: false,
+  progress: 'Не запускалась'
+};
+
+// ─────────────────────────────
+// 🗄️ БАЗА
+// ─────────────────────────────
+const db = new sqlite3.Database('./intercom.db');
 
 db.serialize(() => {
   db.run(`
@@ -30,140 +34,152 @@ db.serialize(() => {
   `);
 });
 
-// ───────────────────────────────────────────────────────
-// 🔵 INTERNAL ARTICLES
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
+// 🔵 INTERNAL
+// ─────────────────────────────
 async function loadInternalArticles() {
-  const token = process.env.INTERCOM_TOKEN;
-  const workspace = process.env.INTERCOM_WORKSPACE_ID || 'rn7ho5ox';
-
   const headers = {
-    'Authorization': `Bearer ${token}`,
+    'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
     'Accept': 'application/json',
     'Intercom-Version': 'Unstable'
   };
 
-  let allArticles = [];
+  let all = [];
   let page = 1;
-  let totalPages = 1;
+  let total = 1;
 
-  console.log('🔵 Загрузка INTERNAL статей');
+  while (page <= total) {
+    syncStatus.progress = `Internal: страница ${page}`;
 
-  while (page <= totalPages) {
-    const url = `https://api.intercom.io/internal_articles?page=${page}&per_page=150`;
+    const res = await fetch(`https://api.intercom.io/internal_articles?page=${page}&per_page=150`, { headers });
+    const data = await res.json();
 
-    try {
-      const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error(await res.text());
+    const items = data.data || [];
 
-      const data = await res.json();
-      const pageArticles = data.data || [];
-
-      console.log(`INTERNAL стр ${page}: ${pageArticles.length}`);
-
-      pageArticles.forEach(a => {
-        allArticles.push({
-          id: `int_${a.id}`,
-          title: a.title || '(без заголовка)',
-          body: (a.body || '').replace(/<[^>]+>/g, ' ').trim(),
-          url: `https://app.intercom.com/a/apps/${workspace}/articles/articles/${a.id}/show`
-        });
+    items.forEach(a => {
+      all.push({
+        id: `int_${a.id}`,
+        title: a.title || '',
+        body: (a.body || '').replace(/<[^>]+>/g, ' '),
+        url: `https://app.intercom.com/a/apps/${process.env.INTERCOM_WORKSPACE_ID}/articles/articles/${a.id}/show`
       });
+    });
 
-      totalPages = data.pages?.total_pages || 1;
+    total = data.pages?.total_pages || 1;
+    if (items.length < 150) break;
 
-      if (pageArticles.length < 150) break;
-
-      page++;
-      await new Promise(r => setTimeout(r, 1200));
-
-    } catch (err) {
-      console.error('❌ INTERNAL ошибка:', err.message);
-      break;
-    }
+    page++;
   }
 
-  console.log(`🔵 INTERNAL всего: ${allArticles.length}`);
-  return allArticles;
+  return all;
 }
 
-// ───────────────────────────────────────────────────────
-// 🌍 PUBLIC ARTICLES (Help Center)
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
+// 🌍 PUBLIC
+// ─────────────────────────────
 async function loadPublicArticles() {
-  const token = process.env.INTERCOM_TOKEN;
-
   const headers = {
-    'Authorization': `Bearer ${token}`,
+    'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
     'Accept': 'application/json',
     'Intercom-Version': '2.11'
   };
 
-  let allArticles = [];
+  let all = [];
   let page = 1;
-  let totalPages = 1;
+  let total = 1;
 
-  console.log('🌍 Загрузка PUBLIC статей');
+  while (page <= total) {
+    syncStatus.progress = `Public: страница ${page}`;
 
-  while (page <= totalPages) {
-    const url = `https://api.intercom.io/articles?page=${page}&per_page=150`;
+    const res = await fetch(`https://api.intercom.io/articles?page=${page}&per_page=150`, { headers });
+    const data = await res.json();
 
-    try {
-      const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error(await res.text());
+    const items = data.data || [];
 
-      const data = await res.json();
-      const pageArticles = data.data || [];
-
-      console.log(`PUBLIC стр ${page}: ${pageArticles.length}`);
-
-      pageArticles.forEach(a => {
-        allArticles.push({
-          id: `pub_${a.id}`,
-          title: a.title || '(без заголовка)',
-          body: (a.body || '').replace(/<[^>]+>/g, ' ').trim(),
-          url: a.url || '#'
-        });
+    items.forEach(a => {
+      all.push({
+        id: `pub_${a.id}`,
+        title: a.title || '',
+        body: (a.body || '').replace(/<[^>]+>/g, ' '),
+        url: a.url || '#'
       });
+    });
 
-      totalPages = data.pages?.total_pages || 1;
+    total = data.pages?.total_pages || 1;
+    if (items.length < 150) break;
 
-      if (pageArticles.length < 150) break;
-
-      page++;
-      await new Promise(r => setTimeout(r, 1000));
-
-    } catch (err) {
-      console.error('❌ PUBLIC ошибка:', err.message);
-      break;
-    }
+    page++;
   }
 
-  console.log(`🌍 PUBLIC всего: ${allArticles.length}`);
-  return allArticles;
+  return all;
 }
 
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
+// 🔗 EXTERNAL
+// ─────────────────────────────
+async function loadExternalPages() {
+  const headers = {
+    'Authorization': `Bearer ${process.env.INTERCOM_TOKEN}`,
+    'Accept': 'application/json',
+    'Intercom-Version': '2.14'
+  };
+
+  let all = [];
+  let page = 1;
+  let total = 1;
+
+  while (page <= total) {
+    syncStatus.progress = `External: страница ${page}`;
+
+    const res = await fetch(`https://api.intercom.io/external_pages?page=${page}&per_page=150`, { headers });
+    const data = await res.json();
+
+    const items = data.data || [];
+
+    items.forEach(p => {
+      all.push({
+        id: `ext_${p.id}`,
+        title: p.title || '',
+        body: (p.body || '').replace(/<[^>]+>/g, ' '),
+        url: p.url || '#'
+      });
+    });
+
+    total = data.pages?.total_pages || 1;
+    if (items.length < 150) break;
+
+    page++;
+  }
+
+  return all;
+}
+
+// ─────────────────────────────
 // 🔄 SYNC
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
 app.get('/sync', async (req, res) => {
+  if (syncStatus.loading) {
+    return res.send('Уже идет синхронизация');
+  }
+
+  syncStatus.loading = true;
+  syncStatus.progress = 'Старт...';
+
   try {
-    const [internal, publicA] = await Promise.all([
+    const [internal, pub, ext] = await Promise.all([
       loadInternalArticles(),
-      loadPublicArticles()
+      loadPublicArticles(),
+      loadExternalPages()
     ]);
 
-    const all = [...internal, ...publicA];
+    const all = [...internal, ...pub, ...ext];
 
-    console.log(`📊 ВСЕГО: ${all.length}`);
+    syncStatus.progress = 'Сохранение...';
 
     db.serialize(() => {
       db.run('DELETE FROM articles');
 
-      const stmt = db.prepare(`
-        INSERT INTO articles (id, title, body, url)
-        VALUES (?, ?, ?, ?)
-      `);
+      const stmt = db.prepare('INSERT INTO articles VALUES (?, ?, ?, ?)');
 
       all.forEach(a => {
         stmt.run(a.id, a.title, a.body, a.url);
@@ -172,114 +188,78 @@ app.get('/sync', async (req, res) => {
       stmt.finalize();
     });
 
-    res.send(`
-      <h2 style="color:green">Синхронизация завершена</h2>
-      <p>Internal: ${internal.length}</p>
-      <p>Public: ${publicA.length}</p>
-      <p><b>Всего:</b> ${all.length}</p>
-      <a href="/">На главную</a>
-    `);
+    syncStatus.loading = false;
+    syncStatus.progress = 'Готово';
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send(err.message);
+    res.send('OK');
+
+  } catch (e) {
+    syncStatus.loading = false;
+    syncStatus.progress = 'Ошибка';
+    res.status(500).send(e.message);
   }
 });
 
-// ───────────────────────────────────────────────────────
-// 🔍 SEARCH (УЛУЧШЕННЫЙ)
-// ───────────────────────────────────────────────────────
-async function searchIntercom(query) {
-  return new Promise((resolve) => {
-    const prepared = query
-      .toLowerCase()
-      .split(/\s+/)
-      .map(w => w + '*')
-      .join(' ');
+// ─────────────────────────────
+// 📡 СТАТУС
+// ─────────────────────────────
+app.get('/sync-status', (req, res) => {
+  res.json(syncStatus);
+});
 
-    db.all(
-      `SELECT title, url, body
-       FROM articles
-       WHERE articles MATCH ?
-       LIMIT 15`,
-      [prepared],
-      (err, rows) => {
-        if (err) {
-          console.error('❌ SEARCH ошибка:', err.message);
-          return resolve([]);
-        }
+// ─────────────────────────────
+// 🔍 ПОИСК
+// ─────────────────────────────
+app.post('/ask', (req, res) => {
+  if (syncStatus.loading) {
+    return res.json({ answer: '⏳ Подождите, идет синхронизация' });
+  }
 
-        resolve(rows.map(r => ({
-          title: r.title,
-          url: r.url,
-          source: r.url.includes('app.intercom')
-            ? 'Intercom (Internal)'
-            : 'Intercom (Public)',
-          snippet: (r.body || '').slice(0, 140) + '...'
-        })));
-      }
-    );
-  });
-}
-
-// ───────────────────────────────────────────────────────
-// 🎯 ASK
-// ───────────────────────────────────────────────────────
-app.post('/ask', async (req, res) => {
   const q = (req.body.question || '').trim();
 
-  if (!q) {
-    return res.json({ answer: 'Введите вопрос' });
-  }
+  const query = q.split(/\s+/).map(w => w + '*').join(' ');
 
-  try {
-    const results = await searchIntercom(q);
+  db.all(
+    `SELECT title, url, body FROM articles WHERE articles MATCH ? LIMIT 15`,
+    [query],
+    (err, rows) => {
+      if (err) return res.json({ answer: 'Ошибка поиска' });
 
-    let html = `<div style="font-family:sans-serif;">`;
+      let html = '';
 
-    results.forEach(item => {
-      const color = item.source.includes('Internal') ? '#0288d1' : '#43a047';
+      rows.forEach(r => {
+        html += `
+          <div style="margin:10px;padding:10px;background:#f5f5f5">
+            <a href="${r.url}" target="_blank"><b>${r.title}</b></a>
+            <div>${(r.body || '').slice(0, 120)}...</div>
+          </div>
+        `;
+      });
 
-      html += `
-        <div style="margin:10px 0;padding:10px;border-left:4px solid ${color};background:#f9f9f9;">
-          <div style="font-size:11px;color:#777;">${item.source}</div>
-          <a href="${item.url}" target="_blank">${item.title}</a>
-          <div style="font-size:13px;color:#555;">${item.snippet}</div>
-        </div>
-      `;
-    });
+      if (!rows.length) html = 'Ничего не найдено';
 
-    if (!results.length) {
-      html += `<p>Ничего не найдено. <a href="/sync">Обновить базу</a></p>`;
+      res.json({ answer: html });
     }
-
-    html += `</div>`;
-
-    res.json({ answer: html });
-
-  } catch (err) {
-    console.error(err);
-    res.json({ answer: 'Ошибка поиска' });
-  }
+  );
 });
 
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
 // 🔐 LOGIN
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
 app.post('/login', (req, res) => {
-  const { username, password, remember } = req.body;
+  const { username, password } = req.body;
 
   if (
     username === process.env.APP_LOGIN &&
     password === process.env.APP_PASSWORD
   ) {
-    res.json({ success: true, remember });
+    res.json({ success: true });
   } else {
     res.json({ success: false });
   }
 });
 
-// ───────────────────────────────────────────────────────
+// ─────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Сервер: ${PORT}`);
+  console.log('🚀 Сервер запущен:', PORT);
 });
