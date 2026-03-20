@@ -28,7 +28,7 @@ db.serialize(() => {
       tokenize='porter unicode61'
     )
   `, (err) => {
-    if (err) console.error('❌ Ошибка создания таблицы:', err.message);
+    if (err) console.error('❌ Ошибка создания таблицы FTS5:', err.message);
   });
 });
 
@@ -41,7 +41,7 @@ async function loadAllIntercomArticles() {
   const headers = {
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/json',
-    'Intercom-Version': 'Unstable'   // если не пойдёт — попробуй '2.14'
+    'Intercom-Version': 'Unstable'   // если не работает — попробуй сменить на '2.14'
   };
 
   let allArticles = [];
@@ -53,30 +53,24 @@ async function loadAllIntercomArticles() {
 
   while (hasMore) {
     page++;
-    const params = new URLSearchParams({
-      per_page: '150'
-    });
-    if (startingAfter) {
-      params.append('starting_after', startingAfter);
-    }
+    const params = new URLSearchParams({ per_page: '150' });
+    if (startingAfter) params.append('starting_after', startingAfter);
 
     const url = `https://api.intercom.io/internal_articles?${params.toString()}`;
-    console.log(`📄 Страница ${page} | URL: ${url}`);
+    console.log(`📄 Страница ${page} → ${url}`);
 
     try {
       const res = await fetch(url, { headers });
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`Intercom ошибка ${res.status}: ${errText}`);
+        throw new Error(`Intercom ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
       const pageArticles = data.data || data.articles || data.internal_articles || [];
 
-      console.log(`   Получено статей на странице: ${pageArticles.length}`);
-      console.log(`   Общее количество на данный момент: ${allArticles.length + pageArticles.length}`);
+      console.log(`   Получено на странице: ${pageArticles.length} статей`);
 
-      // Добавляем статьи
       pageArticles.forEach(a => {
         allArticles.push({
           id: a.id,
@@ -86,25 +80,25 @@ async function loadAllIntercomArticles() {
         });
       });
 
-      // Проверяем, есть ли следующая страница
-      const nextPage = data.pages?.next;
-      if (nextPage && nextPage.starting_after) {
-        startingAfter = nextPage.starting_after;
-        console.log(`   Есть следующая страница (starting_after = ${startingAfter.substring(0, 20)}...)`);
-        await new Promise(resolve => setTimeout(resolve, 1200)); // задержка 1.2 сек
+      // Проверка на следующую страницу
+      const next = data.pages?.next;
+      if (next && next.starting_after) {
+        startingAfter = next.starting_after;
+        console.log(`   → Есть следующая (starting_after = ${startingAfter.substring(0, 30)}...)`);
+        await new Promise(r => setTimeout(r, 2000)); // 2 секунды паузы
       } else {
-        console.log('   Нет следующей страницы (pages.next или starting_after отсутствует)');
+        console.log('   → Нет следующей страницы (pages.next или starting_after отсутствует)');
         hasMore = false;
       }
 
-      // Дополнительная защита: если пришло меньше 150, скорее всего конец
+      // Защита: если пришло меньше максимума — вероятно конец
       if (pageArticles.length < 150) {
-        console.log('   Получено меньше 150 статей → вероятно последняя страница');
+        console.log('   → Получено <150 → завершаем');
         hasMore = false;
       }
 
     } catch (err) {
-      console.error(`   Ошибка на странице ${page}:`, err.message);
+      console.error(`   Ошибка на странице ${page}: ${err.message}`);
       hasMore = false;
     }
   }
@@ -113,51 +107,95 @@ async function loadAllIntercomArticles() {
   return allArticles;
 }
 
-// ─── Поиск по ClickUp (строгий фильтр по словам) ────────────────────────────
+// ─── Эндпоинт синхронизации (теперь всегда показывает результат или ошибку) ─
+app.get('/sync', async (req, res) => {
+  try {
+    const articles = await loadAllIntercomArticles();
+
+    // Очистка + вставка
+    db.run('DELETE FROM articles', (err) => {
+      if (err) console.error('DELETE error:', err);
+    });
+
+    const stmt = db.prepare('INSERT INTO articles (id, title, body, url) VALUES (?, ?, ?, ?)');
+    articles.forEach(a => stmt.run(a.id, a.title, a.body, a.url));
+    stmt.finalize((err) => {
+      if (err) console.error('INSERT finalize error:', err);
+    });
+
+    res.send(`
+      <h2 style="color: green;">Готово!</h2>
+      <p>Загружено <strong>${articles.length}</strong> статей из Intercom</p>
+      <p>Поиск теперь работает через главную страницу.</p>
+      <p><a href="/">← На главную</a></p>
+    `);
+  } catch (err) {
+    console.error('Ошибка в /sync:', err.message);
+    res.status(500).send(`
+      <h2 style="color: red;">Ошибка синхронизации</h2>
+      <pre>${err.message}</pre>
+      <p>Проверьте логи Render и переменные в .env (INTERCOM_TOKEN и т.д.)</p>
+      <a href="/">← На главную</a>
+    `);
+  }
+});
+
+// ─── ПОИСК ПО SQLITE (это было пропущено!) ────────────────────────────────
+async function searchIntercom(question) {
+  return new Promise((resolve) => {
+    db.all(
+      `SELECT title, url, body, rank
+       FROM articles
+       WHERE articles MATCH ?
+       ORDER BY rank LIMIT 15`,
+      [question.trim() + '*'],
+      (err, rows) => {
+        if (err) {
+          console.error('SQLite search error:', err.message);
+          return resolve([]);
+        }
+        resolve(rows.map(r => ({
+          title: r.title,
+          url: r.url,
+          source: 'Intercom',
+          snippet: (r.body || '').substring(0, 140) + '...'
+        })));
+      }
+    );
+  });
+}
+
+// ─── CLICKUP ────────────────────────────────────────────────────────────────
 function matchesQuery(text, query) {
   if (!text || !query) return false;
   const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-  const target = text.toLowerCase();
-  return words.every(word => target.includes(word));
+  return words.every(word => text.toLowerCase().includes(word));
 }
 
 async function searchClickUp(question) {
   if (!process.env.CLICKUP_TOKEN || !process.env.CLICKUP_TEAM_ID) return [];
-
   try {
     const url = `https://api.clickup.com/api/v2/team/${process.env.CLICKUP_TEAM_ID}/task?include_closed=true`;
-    const res = await fetch(url, {
-      headers: { 'Authorization': process.env.CLICKUP_TOKEN }
-    });
-
+    const res = await fetch(url, { headers: { 'Authorization': process.env.CLICKUP_TOKEN } });
     if (!res.ok) throw new Error(`ClickUp ${res.status}`);
-
     const { tasks = [] } = await res.json();
-
-    const matches = tasks
-      .filter(t => matchesQuery(t.name, question))
-      .slice(0, 10)
-      .map(t => ({
-        title: t.name,
-        url: t.url,
-        source: 'ClickUp'
-      }));
-
-    return matches;
+    const matches = tasks.filter(t => matchesQuery(t.name, question)).slice(0, 10);
+    return matches.map(t => ({
+      title: t.name,
+      url: t.url,
+      source: 'ClickUp'
+    }));
   } catch (err) {
     console.error('ClickUp ошибка:', err.message);
     return [];
   }
 }
 
-// ─── Главный поиск ──────────────────────────────────────────────────────────
+// ─── ГЛАВНЫЙ ПОИСК ──────────────────────────────────────────────────────────
 app.post('/ask', async (req, res) => {
   const { question } = req.body;
   const q = (question || '').trim();
-
-  if (!q) {
-    return res.json({ answer: '<p style="color:#d32f2f">Введите поисковый запрос</p>' });
-  }
+  if (!q) return res.json({ answer: '<p style="color:#d32f2f">Введите вопрос</p>' });
 
   try {
     const [intercom, clickup] = await Promise.all([
@@ -166,8 +204,8 @@ app.post('/ask', async (req, res) => {
     ]);
 
     let html = `
-      <div style="font-family:sans-serif; padding:8px 0;">
-        <div style="color:#555; font-size:13px; margin-bottom:12px;">
+      <div style="font-family:sans-serif; padding:8px;">
+        <div style="color:#555; margin-bottom:12px;">
           Intercom: ${intercom.length} | ClickUp: ${clickup.length}
         </div>`;
 
@@ -175,30 +213,25 @@ app.post('/ask', async (req, res) => {
       const color = item.source === 'Intercom' ? '#0288d1' : '#673ab7';
       html += `
         <div style="margin:10px 0; padding:10px; border-left:4px solid ${color}; background:#fafafa; border-radius:4px;">
-          <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">${item.source}</div>
-          <a href="${item.url}" target="_blank" style="color:#0066cc; font-weight:600; text-decoration:none;">${item.title}</a>
+          <div style="font-size:11px; color:#777; text-transform:uppercase;">${item.source}</div>
+          <a href="${item.url}" target="_blank" style="color:#0066cc; font-weight:600;">${item.title}</a>
           ${item.snippet ? `<div style="margin-top:6px; color:#555; font-size:13px;">${item.snippet}</div>` : ''}
         </div>`;
     });
 
     if (intercom.length + clickup.length === 0) {
-      html += `
-        <p style="color:#757575; margin-top:20px;">
-          Ничего не найдено по запросу «${q}».<br>
-          Попробуйте обновить базу: <a href="/sync" target="_blank" style="color:#d81b60;">/sync</a>
-        </p>`;
+      html += `<p style="color:#757575;">Ничего не найдено. Обнови базу: <a href="/sync">/sync</a></p>`;
     }
 
     html += '</div>';
-
     res.json({ answer: html });
   } catch (err) {
-    console.error('Ошибка в /ask:', err);
-    res.json({ answer: '<p style="color:#d32f2f">Произошла ошибка при поиске</p>' });
+    console.error('Ошибка /ask:', err.message);
+    res.json({ answer: '<p style="color:#d32f2f">Произошла ошибка при поиске. Проверь логи Render.</p>' });
   }
 });
 
-// ─── Логин (без изменений) ──────────────────────────────────────────────────
+// ─── ЛОГИН ──────────────────────────────────────────────────────────────────
 app.post('/login', (req, res) => {
   const { username, password, remember } = req.body;
   if (username === process.env.APP_LOGIN && password === process.env.APP_PASSWORD) {
@@ -208,9 +241,8 @@ app.post('/login', (req, res) => {
   }
 });
 
-// ─── Запуск сервера ─────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  console.log(`   → Синхронизация:    GET  /sync`);
-  console.log(`   → Поиск:            POST /ask`);
+  console.log(`🚀 Сервер на порту ${PORT}`);
+  console.log(`   GET /sync  → обновить базу Intercom`);
+  console.log(`   POST /ask → поиск`);
 });
